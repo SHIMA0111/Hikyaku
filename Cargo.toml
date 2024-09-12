@@ -2,5 +2,7 @@
 name = "hikyaku"
 version = "0.1.0"
 edition = "2021"
+authors = ["shima@little-tabby.com"]
+license = "MIT/Apache-2.0"
 
 [dependencies]
