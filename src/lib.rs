@@ -1,3 +1,8 @@
+mod services;
+pub mod utils;
+
+const CACHE_DIR: &str = ".hikyaku";
+
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
 }
