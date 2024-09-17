@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
@@ -13,7 +14,6 @@ use serde::Deserialize;
 use time::OffsetDateTime;
 use tokio::sync::mpsc::{Sender};
 use tokio::sync::Mutex;
-use tokio::sync::oneshot::Receiver;
 use crate::utils::oauth2::Token;
 use crate::utils::oauth2::drop_control::Defer;
 
@@ -24,11 +24,12 @@ pub(crate) struct AppState {
     pkce_verifier: Arc<Mutex<Option<PkceCodeVerifier>>>,
     csrf_token: Arc<Mutex<Option<CsrfToken>>>,
     shutdown_flag: Arc<AtomicBool>,
+    extra_args: HashMap<String, String>,
     sender: Sender<Token>
 }
 
 #[derive(Deserialize, Debug)]
-pub(super) struct AuthCallback {
+pub(crate) struct AuthCallback {
     code: Option<String>,
     state: Option<String>,
     error: Option<String>,
@@ -52,6 +53,9 @@ pub(crate) async fn spawn_webserver(client: &BasicClient,
                                     protocol: &str,
                                     redirect_hostname: &str,
                                     port: u16,
+                                    init_path: &str,
+                                    redirect_path: &str,
+                                    extra_args: &HashMap<String, String>,
                                     sender: Sender<Token>) {
     let shutdown_flag = Arc::new(AtomicBool::new(false));
 
@@ -61,15 +65,20 @@ pub(crate) async fn spawn_webserver(client: &BasicClient,
         pkce_verifier: Arc::new(Mutex::new(None)),
         csrf_token: Arc::new(Mutex::new(None)),
         shutdown_flag: shutdown_flag.clone(),
+        extra_args: extra_args.clone(),
         sender,
     };
 
-    let auth_init_uri = format!("{}://{}:{}/auth/init", protocol, redirect_hostname, port);
+    let auth_init_uri = if [443, 80].contains(&port) {
+        format!("{}://{}{}", protocol, redirect_hostname, init_path)
+    } else {
+        format!("{}://{}:{}{}", protocol, redirect_hostname, port, init_path)
+    };
     println!("Please access and auth this app: {}", auth_init_uri);
 
     let app = Router::new()
-        .route("/auth/init", get(init_auth))
-        .route("/auth/callback", get(callback_auth))
+        .route(init_path, get(init_auth))
+        .route(redirect_path, get(callback_auth))
         .route("/auth/complete", get(complete_auth2))
         .route("/auth/failed", get(failed_auth2))
         .route("/auth/infringe", get(infringed_connection))
@@ -90,10 +99,13 @@ async fn shutdown(shutdown_flag: Arc<AtomicBool>) {
     }
 }
 
-pub(super) async fn init_auth(State(state): State<AppState>) -> Redirect {
+pub(crate) async fn init_auth(State(state): State<AppState>) -> Redirect {
     let mut auth_url = state.oauth_client.authorize_url(CsrfToken::new_random);
     for scope in &state.scopes {
         auth_url = auth_url.add_scope(Scope::new(scope.to_string()));
+    }
+    for (key, value) in &state.extra_args {
+        auth_url = auth_url.add_extra_param(key, value);
     }
     let (pkce_code_challenge, pkce_code_verifier) = PkceCodeChallenge::new_random_sha256();
     let (authorization_uri, csrf_token) = auth_url
@@ -126,7 +138,7 @@ pub(crate) async fn callback_auth(Query(auth_callback): Query<AuthCallback>,
             None => {
                 debug!("callback query: {:?}", auth_callback);
                 error!("Authorization code indicates empty.");
-                if let Some(error) = auth_callback.error.as_ref() {
+                return if let Some(error) = auth_callback.error.as_ref() {
                     let message =
                         format!("Failed reason: {} ({})",
                                 error,
@@ -134,9 +146,9 @@ pub(crate) async fn callback_auth(Query(auth_callback): Query<AuthCallback>,
                                     .as_ref()
                                     .map(String::as_str)
                                     .unwrap_or("Unknown details"));
-                    return Redirect::to(format!("/auth/failed?message={}", message).as_str());
+                    Redirect::to(format!("/auth/failed?message={}", message).as_str())
                 } else {
-                    return Redirect::to("/auth/failed");
+                    Redirect::to("/auth/failed")
                 }
 
             }
@@ -164,6 +176,7 @@ pub(crate) async fn callback_auth(Query(auth_callback): Query<AuthCallback>,
                 let expires_at = OffsetDateTime::now_utc() + expires_in;
 
                 let token_data = Token {
+                    application_id: state.oauth_client.client_id().to_string(),
                     access_token: token.access_token().secret().to_string(),
                     refresh_token: token.refresh_token().map(|refresh| refresh.secret().to_string()),
                     expires_at,
@@ -188,7 +201,7 @@ pub(crate) async fn callback_auth(Query(auth_callback): Query<AuthCallback>,
     }
 }
 
-pub(super) async fn complete_auth2() -> &'static str {
+pub(crate) async fn complete_auth2() -> &'static str {
     "Authentication successful. Please return your application."
 }
 
@@ -209,6 +222,6 @@ pub(crate) async fn failed_auth2(Query(error): Query<ErrorMessage>) -> String {
     }
 }
 
-pub(super) async fn infringed_connection() -> &'static str {
+pub(crate) async fn infringed_connection() -> &'static str {
     "Csrf token verification failed. This connection may be infringed."
 }

@@ -2,10 +2,11 @@ use std::fmt::Display;
 use oauth2::AuthType;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum Oauth2Provider {
+pub(crate) enum Oauth2Provider {
     Google,
     Microsoft,
-    Box
+    Box,
+    Dropbox,
 }
 
 const REQUEST_BODY_SECRET: [Oauth2Provider;1] = [Oauth2Provider::Box];
@@ -26,6 +27,7 @@ impl Display for Oauth2Provider {
             Oauth2Provider::Google => write!(f, "Google"),
             Oauth2Provider::Microsoft => write!(f, "Microsoft"),
             Oauth2Provider::Box => write!(f, "Box"),
+            Oauth2Provider::Dropbox => write!(f, "Dropbox"),
         }
     }
 }
