@@ -1,6 +1,6 @@
 mod web_server;
 pub(crate) mod drop_control;
-pub(crate) mod provider;
+pub mod provider;
 mod url_parser;
 mod stores;
 mod token_refresh;
@@ -187,9 +187,9 @@ impl SecretData {
     /// it returns the access token. If the token is expired, it attempts to refresh the token using the
     /// refresh token. If the token scopes don't match, it requires re-authentication. If there is no token,
     /// it starts the OAuth2 flow to get a new token.
-    pub async fn get_access_token(&self, scopes: &[&str],
-                                  token_path: &Path) -> Option<String> {
-        let token_info = match load_token(self.provider, token_path) {
+    pub async fn get_access_token<TP: AsRef<Path>>(&self, scopes: &[&str],
+                                                   token_path: TP) -> Option<String> {
+        let token_info = match load_token(self.provider.clone(), token_path.as_ref()) {
             Some(token_info) => {
                 if token_info.expires_at > OffsetDateTime::now_utc() && scopes == token_info.scopes {
                     debug!("Token found: {}", token_info);
@@ -231,7 +231,7 @@ impl SecretData {
             if let Some(new_token) = token_refresh(&client, &refresh_token, scopes).await {
                 if new_token.scopes == scopes {
                     info!("Refresh the access token completed normally:\n{}", new_token);
-                    if let Err(e) = save_token(self.provider, &new_token, token_path) {
+                    if let Err(e) = save_token(self.provider.clone(), &new_token, token_path.as_ref()) {
                         error!("Failed to save token. This token isn't stored. (error: {:?})", e);
                     }
                     return Some(new_token.access_token);
@@ -255,7 +255,7 @@ impl SecretData {
         match receiver.recv().await {
             Some(token_data) => {
                 debug!("Get token:\n{}", token_data);
-                save_token(self.provider, &token_data, token_path).unwrap();
+                save_token(self.provider.clone(), &token_data, token_path.as_ref()).unwrap();
                 Some(token_data.access_token.to_string())
             }
             None => None

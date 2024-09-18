@@ -4,6 +4,7 @@ use log::error;
 use serde::Deserialize;
 use crate::utils::errors::{HikyakuError, HikyakuResult};
 use crate::utils::oauth2::provider::Oauth2Provider::{Google, Box, Dropbox, Microsoft};
+use crate::utils::oauth2::provider::{Oauth2Provider, OauthType};
 use crate::utils::oauth2::SecretData;
 use crate::utils::oauth2::url_parser::parse_url;
 
@@ -123,13 +124,7 @@ pub fn load_google_oauth2_secret<SP: AsRef<Path>>(secret_json_path: SP) -> Hikya
 /// }
 /// ```
 pub fn get_google_oauth2_secret(client_id: &str, client_secret: &str, redirect_uri: Option<&str>) -> HikyakuResult<SecretData> {
-    let (redirect_base_uri, port) = match redirect_uri {
-        Some(uri) => {
-            let (base_uri, port) = parse_url(uri)?;
-            (Some(base_uri), port)
-        },
-        None => (None, 80)
-    };
+    let (redirect_base_uri, port) = get_redirect_uri_with_default(redirect_uri)?;
 
     let secret_data = SecretData::new(
         client_id,
@@ -181,13 +176,7 @@ pub fn get_google_oauth2_secret(client_id: &str, client_secret: &str, redirect_u
 /// }
 /// ```
 pub fn get_box_oauth2_secret(client_id: &str, client_secret: &str, redirect_uri: Option<&str>) -> HikyakuResult<SecretData> {
-    let (redirect_base_uri, port) = match redirect_uri {
-        Some(uri) => {
-            let (base_uri, port) = parse_url(uri)?;
-            (Some(base_uri), port)
-        },
-        None => (None, 80)
-    };
+    let (redirect_base_uri, port) = get_redirect_uri_with_default(redirect_uri)?;
 
     let secret_data = SecretData::new(
         client_id,
@@ -240,13 +229,7 @@ pub fn get_box_oauth2_secret(client_id: &str, client_secret: &str, redirect_uri:
 /// }
 /// ```
 pub fn get_dropbox_oauth2_secret(client_id: &str, client_secret: &str, redirect_uri: Option<&str>) -> HikyakuResult<SecretData> {
-    let (redirect_base_uri, port) = match redirect_uri {
-        Some(uri) => {
-            let (base_uri, port) = parse_url(uri)?;
-            (Some(base_uri), port)
-        },
-        None => (None, 80)
-    };
+    let (redirect_base_uri, port) = get_redirect_uri_with_default(redirect_uri)?;
 
     let secret_data = SecretData::new(
         client_id,
@@ -341,13 +324,7 @@ pub fn get_microsoft_oauth2_secret(client_id: &str,
         }
     };
 
-    let (redirect_base_uri, port) = match redirect_uri {
-        Some(uri) => {
-            let (base_uri, port) = parse_url(uri)?;
-            (Some(base_uri), port)
-        },
-        None => (None, 80)
-    };
+    let (redirect_base_uri, port) = get_redirect_uri_with_default(redirect_uri)?;
 
 
     let secret_data = SecretData::new(
@@ -361,4 +338,89 @@ pub fn get_microsoft_oauth2_secret(client_id: &str,
     );
 
     Ok(secret_data)
+}
+
+
+/// Creates a `SecretData` instance for a generic OAuth2 provider using the provided
+/// provider name, authentication type, client credentials, authorization URI, token URI, and an optional redirect URI.
+///
+/// # Arguments
+///
+/// * `provider_name` - A string slice that holds the name of the OAuth2 provider.
+/// * `oauth_type` - An instance of `OauthType` representing the type of OAuth authentication for the provider.
+/// * `client_id` - A string slice that holds the client ID.
+/// * `client_secret` - A string slice that holds the client secret.
+/// * `auth_uri` - A string slice that holds the authorization URI.
+/// * `token_uri` - A string slice that holds the token URI.
+/// * `redirect_uri` - An optional string slice that holds the redirect URI.
+///
+/// # Returns
+///
+/// A `HikyakuResult` which is either:
+///
+/// - `Ok(SecretData)` containing the created secret data.
+/// - `Err(HikyakuError)` with a message describing the error that occurred.
+///
+/// # Errors
+///
+/// This function will return an error if the `redirect_uri` is invalid.
+///
+/// # Examples
+///
+/// ```
+/// use hikyaku::utils::oauth2::services::get_generic_oauth2_secret;
+/// use hikyaku::utils::oauth2::provider::OauthType;
+///
+/// let provider_name = "custom_provider";
+/// let oauth_type = OauthType::RequestBody;
+/// let client_id = "your-client-id";
+/// let client_secret = "your-client-secret";
+/// let auth_uri = "https://custom.provider.com/oauth2/authorize";
+/// let token_uri = "https://custom.provider.com/oauth2/token";
+/// let redirect_uri = Some("https://your-redirect-uri");
+///
+/// match get_generic_oauth2_secret(provider_name, oauth_type, client_id, client_secret, auth_uri, token_uri, redirect_uri) {
+///     Ok(secret_data) => {
+///         // Use the secret data
+///     }
+///     Err(e) => {
+///         eprintln!("Error: {:?}", e);
+///     }
+/// }
+/// ```
+pub fn get_generic_oauth2_secret(provider_name: &str,
+                                 oauth_type: OauthType,
+                                 client_id: &str,
+                                 client_secret: &str,
+                                 auth_uri: &str,
+                                 token_uri: &str,
+                                 redirect_uri: Option<&str>) -> HikyakuResult<SecretData> {
+    let provider = Oauth2Provider::Custom {
+        name: provider_name.to_string(),
+        auth_type: oauth_type,
+    };
+    let (redirect_base_uri, port) = get_redirect_uri_with_default(redirect_uri)?;
+
+    let secret_data = SecretData::new(
+        client_id,
+        client_secret,
+        auth_uri,
+        token_uri,
+        redirect_base_uri.as_deref(),
+        port,
+        provider
+    );
+
+    Ok(secret_data)
+}
+
+
+fn get_redirect_uri_with_default(redirect_uri: Option<&str>) -> HikyakuResult<(Option<String>, u16)> {
+    match redirect_uri {
+        Some(uri) => {
+            let (base_uri, port) = parse_url(uri)?;
+            Ok((Some(base_uri), port))
+        },
+        None => Ok((None, 80))
+    }
 }
