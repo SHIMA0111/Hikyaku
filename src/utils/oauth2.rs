@@ -106,6 +106,7 @@ impl SecretData {
     /// ).unwrap();
     ///
     /// secret_data.set_init_path("/new_init_path");
+    /// assert!(secret_data.to_string().contains("INIT_PATH: /new_init_path"))
     /// ```
     pub fn set_init_path(&mut self, init_path: &str) {
         self.init_path = if init_path.starts_with("/") {
@@ -135,6 +136,7 @@ impl SecretData {
     /// ).unwrap();
     ///
     /// secret_data.set_redirect_path("/new_callback_path");
+    /// assert!(secret_data.to_string().contains("https://example.com/new_callback_path"))
     /// ```
     pub fn set_redirect_path(&mut self, callback_path: &str) {
         self.redirect_path = if callback_path.starts_with("/") {
@@ -153,20 +155,6 @@ impl SecretData {
     ///
     /// * `key` - A string slice that holds the name of the URL parameter.
     /// * `value` - A string slice that holds the value of the URL parameter.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use hikyaku::utils::oauth2::services::get_google_oauth2_secret;
-    ///
-    /// let mut secret_data = get_google_oauth2_secret(
-    ///     "client_id",
-    ///     "client_secret",
-    ///     Some("https://example.com"),
-    /// ).unwrap();
-    ///
-    /// secret_data.add_extra_args_for_auth_url("include_granted_scopes", "true");
-    /// ```
     pub fn add_extra_args_for_auth_url(&mut self, key: &str, value: &str) {
         self.extra_args.insert(key.to_string(), value.to_string());
     }
@@ -260,5 +248,19 @@ impl SecretData {
             }
             None => None
         }
+    }
+}
+
+impl Display for SecretData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let redirect_uri = if [443, 80].contains(&self.port) {
+            format!("{}://{}{}", self.protocol, self.redirect_hostname, self.redirect_path)
+        } else {
+            format!("{}://{}:{}{}", self.protocol, self.redirect_hostname, self.port, self.redirect_path)
+        };
+        let message =
+            format!("SECRET INFO\nCLIENT_ID: {}\nAUTH_URI: {}\nTOKEN_URI: {}\nINIT_PATH: {}\nREDIRECT_URI: {}\nPROVIDER: {}",
+                    self.client_id, self.auth_uri, self.token_uri, self.init_path, redirect_uri, self.provider);
+        write!(f, "{}", message)
     }
 }

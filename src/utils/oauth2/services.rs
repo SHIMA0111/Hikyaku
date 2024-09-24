@@ -114,14 +114,7 @@ pub fn load_google_oauth2_secret<SP: AsRef<Path>>(secret_json_path: SP) -> Hikya
 /// let client_id = "your-client-id";
 /// let client_secret = "your-client-secret";
 /// let redirect_uri = Some("https://your-redirect-uri");
-/// match get_google_oauth2_secret(client_id, client_secret, redirect_uri) {
-///     Ok(secret_data) => {
-///         // Use the secret data
-///     }
-///     Err(e) => {
-///         eprintln!("Error: {:?}", e);
-///     }
-/// }
+/// assert!(get_google_oauth2_secret(client_id, client_secret, redirect_uri).is_ok())
 /// ```
 pub fn get_google_oauth2_secret(client_id: &str, client_secret: &str, redirect_uri: Option<&str>) -> HikyakuResult<SecretData> {
     let (redirect_base_uri, port) = get_redirect_uri_with_default(redirect_uri)?;
@@ -166,14 +159,7 @@ pub fn get_google_oauth2_secret(client_id: &str, client_secret: &str, redirect_u
 /// let client_id = "your-client-id";
 /// let client_secret = "your-client-secret";
 /// let redirect_uri = Some("https://your-redirect-uri");
-/// match get_box_oauth2_secret(client_id, client_secret, redirect_uri) {
-///     Ok(secret_data) => {
-///         // Use the secret data
-///     }
-///     Err(e) => {
-///         eprintln!("Error: {:?}", e);
-///     }
-/// }
+/// assert!(get_box_oauth2_secret(client_id, client_secret, redirect_uri).is_ok())
 /// ```
 pub fn get_box_oauth2_secret(client_id: &str, client_secret: &str, redirect_uri: Option<&str>) -> HikyakuResult<SecretData> {
     let (redirect_base_uri, port) = get_redirect_uri_with_default(redirect_uri)?;
@@ -219,14 +205,7 @@ pub fn get_box_oauth2_secret(client_id: &str, client_secret: &str, redirect_uri:
 /// let client_id = "your-client-id";
 /// let client_secret = "your-client-secret";
 /// let redirect_uri = Some("https://your-redirect-uri");
-/// match get_dropbox_oauth2_secret(client_id, client_secret, redirect_uri) {
-///     Ok(secret_data) => {
-///         // Use the secret data
-///     }
-///     Err(e) => {
-///         eprintln!("Error: {:?}", e);
-///     }
-/// }
+/// assert!(get_dropbox_oauth2_secret(client_id, client_secret, redirect_uri).is_ok())
 /// ```
 pub fn get_dropbox_oauth2_secret(client_id: &str, client_secret: &str, redirect_uri: Option<&str>) -> HikyakuResult<SecretData> {
     let (redirect_base_uri, port) = get_redirect_uri_with_default(redirect_uri)?;
@@ -251,15 +230,6 @@ pub fn get_dropbox_oauth2_secret(client_id: &str, client_secret: &str, redirect_
 ///
 /// * `SingleTenant` - This variant is used for a single-tenant application. It requires a `tenant_id` which is a static string slice identifying the tenant.
 /// * `MultiTenant` - This variant is used for multi-tenant applications where the application can sign in users from multiple organizations.
-///
-/// # Examples
-///
-/// ```
-/// use hikyaku::utils::oauth2::services::MicrosoftTenantType;
-///
-/// let single_tenant = MicrosoftTenantType::SingleTenant { tenant_id: "your-tenant-id" };
-/// let multi_tenant = MicrosoftTenantType::MultiTenant;
-/// ```
 pub enum MicrosoftTenantType {
     SingleTenant{
         tenant_id: &'static str
@@ -297,14 +267,7 @@ pub enum MicrosoftTenantType {
 /// let client_secret = "your-client-secret";
 /// let redirect_uri = Some("https://your-redirect-uri");
 /// let tenant_type = MicrosoftTenantType::SingleTenant { tenant_id: "your-tenant-id" };
-/// match get_microsoft_oauth2_secret(client_id, client_secret, redirect_uri, tenant_type) {
-///     Ok(secret_data) => {
-///         // Use the secret data
-///     }
-///     Err(e) => {
-///         eprintln!("Error: {:?}", e);
-///     }
-/// }
+/// assert!(get_microsoft_oauth2_secret(client_id, client_secret, redirect_uri, tenant_type).is_ok())
 /// ```
 pub fn get_microsoft_oauth2_secret(client_id: &str,
                                    client_secret: &str,
@@ -379,14 +342,7 @@ pub fn get_microsoft_oauth2_secret(client_id: &str,
 /// let token_uri = "https://custom.provider.com/oauth2/token";
 /// let redirect_uri = Some("https://your-redirect-uri");
 ///
-/// match get_generic_oauth2_secret(provider_name, oauth_type, client_id, client_secret, auth_uri, token_uri, redirect_uri) {
-///     Ok(secret_data) => {
-///         // Use the secret data
-///     }
-///     Err(e) => {
-///         eprintln!("Error: {:?}", e);
-///     }
-/// }
+/// assert!(get_generic_oauth2_secret(provider_name, oauth_type, client_id, client_secret, auth_uri, token_uri, redirect_uri).is_ok())
 /// ```
 pub fn get_generic_oauth2_secret(provider_name: &str,
                                  oauth_type: OauthType,
