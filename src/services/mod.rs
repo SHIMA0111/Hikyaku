@@ -1,4 +1,6 @@
 use std::path::{Path, PathBuf};
+use log::error;
+use url::Url;
 use crate::utils::errors::{HikyakuError, HikyakuResult};
 use crate::utils::oauth2::SecretData;
 
@@ -6,6 +8,10 @@ pub mod s3;
 pub mod google_drive;
 pub mod r#box;
 pub mod one_drive;
+
+pub trait Service {
+    fn new(client_id: &str, client_secret: &str, redirect_uri: Option<&str>) -> HikyakuResult<Self> where Self: Sized;
+}
 
 pub(crate) struct API {
     secret_data: SecretData,
@@ -43,6 +49,20 @@ impl API {
         };
 
         format!("{}{}", self.api_base_uri, endpoint)
+    }
+
+    pub(crate) fn get_request_url<EF>(&self, endpoint: &str, error_fn: EF) -> HikyakuResult<Url>
+    where
+        EF: Fn(String) -> HikyakuError,
+    {
+        let api_endpoint = self.generate_endpoint(endpoint);
+        match Url::parse(&api_endpoint) {
+            Ok(uri) => Ok(uri),
+            Err(e) => {
+                error!("Failed to parse endpoint: {:?}", e);
+                Err(error_fn("Failed to parse endpoint for get_drive_list".to_string()))
+            }
+        }
     }
 }
 
