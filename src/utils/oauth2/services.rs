@@ -2,7 +2,7 @@ use std::fs::File;
 use std::path::Path;
 use log::error;
 use serde::Deserialize;
-use crate::utils::errors::{HikyakuError, HikyakuResult};
+use crate::errors::{HikyakuError, HikyakuResult};
 use crate::utils::oauth2::provider::Oauth2Provider::{Google, Box, Dropbox, Microsoft};
 use crate::utils::oauth2::provider::{Oauth2Provider, OauthType};
 use crate::utils::oauth2::SecretData;

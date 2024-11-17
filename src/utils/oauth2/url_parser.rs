@@ -1,5 +1,5 @@
 use url::Url;
-use crate::utils::errors::{HikyakuError, HikyakuResult};
+use crate::errors::{HikyakuError, HikyakuResult};
 
 
 /// Extracts the protocol and hostname from the given URL string.

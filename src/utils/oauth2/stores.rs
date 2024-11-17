@@ -3,7 +3,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use log::debug;
 use time::OffsetDateTime;
-use crate::CACHE_DIR;
 use crate::utils::oauth2::Token;
 
 pub(crate) fn save_token<TS>(service: TS, token: &Token, token_path: &Path) -> std::io::Result<()>
@@ -42,7 +41,6 @@ where
 
 fn _load_token(token_path: &Path) -> (PathBuf, HashMap<String, Token>) {
     let mut token_path = token_path.to_path_buf();
-    token_path.push(CACHE_DIR);
     token_path.push("tokens.json");
     if token_path.exists() {
         debug!("Token file found at {:?}", token_path);

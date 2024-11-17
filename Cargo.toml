@@ -1,20 +1,39 @@
 [package]
 name = "hikyaku"
 description = "A Rust library for seamless file transfers across multiple cloud storage providers and local filesystems, simplifying multi-cloud data management"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 authors = ["shima@little-tabby.com"]
 license = "MIT/Apache-2.0"
 
+[features]
+default = []
+google_oauth2 = ["oauth2/rustls-tls", "axum/default", "url/default"]
+
 [dependencies]
-axum = "0.7"
-oauth2 = { version = "4", features = ["rustls-tls"] }
+aws-config = "1"
+aws-sdk-s3 = "1"
+colored = "2"
+async-trait = "0"
+thiserror = "2"
 reqwest = { version = "0.12", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 time = { version = "0.3", features = ["serde"] }
 tokio = { version = "1", features = ["full"] }
-url = "2"
 log = "0.4"
 env_logger = "0.11"
-dirs = "5"
+regex = "1.10.6"
+
+[dependencies.oauth2]
+version = "4"
+features = ["rustls-tls"]
+optional = true
+
+[dependencies.axum]
+version = "0.7"
+optional = true
+
+[dependencies.url]
+version = "2"
+optional = true
