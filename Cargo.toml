@@ -8,7 +8,7 @@ license = "MIT/Apache-2.0"
 
 [features]
 default = []
-google_oauth2 = ["oauth2/rustls-tls", "axum/default", "url/default"]
+google_oauth2 = ["oauth2", "axum", "url"]
 
 [dependencies]
 aws-config = "1"
