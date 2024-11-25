@@ -1,4 +1,7 @@
+use std::borrow::Cow;
 use std::str::FromStr;
+use aws_config::meta::region::ProvideRegion;
+use aws_config::{Region as AwsConfigRegion};
 use log::error;
 use crate::errors::{HikyakuError, HikyakuResult};
 use crate::errors::HikyakuError::InvalidArgumentError;
@@ -171,6 +174,22 @@ fn get_aws_region_from_str(region_str: &str) -> HikyakuResult<AWSRegion> {
     }
 }
 
+impl ProvideRegion for AWSRegion {
+    fn region(&self) -> aws_config::meta::region::future::ProvideRegion {
+        aws_config::meta::region::future::ProvideRegion::new(async { 
+            Some(AwsConfigRegion::new(self.get_region().to_string()))
+        })
+    }
+}
+
+impl TryFrom<AwsConfigRegion> for AWSRegion {
+    type Error = HikyakuError;
+    
+    fn try_from(value: AwsConfigRegion) -> Result<Self, Self::Error> {
+        get_aws_region_from_str(value.as_ref())
+    }
+}
+
 impl Default for AWSRegion {
     fn default() -> Self {
         AWSRegion::Ohio
@@ -235,5 +254,11 @@ mod tests {
         let region_from_str = AWSRegion::from_str(region_str);
         assert!(region_from_str.is_err());
         assert_eq!(region_from_str.unwrap_err().to_string(), format!("Get invalid argument error: {} not exist in AWS region", region_str));
+    }
+
+    #[test]
+    fn test_region_default() {
+        let region = AWSRegion::default();
+        assert_eq!(region.get_region(), "us-east-2");
     }
 }

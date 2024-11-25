@@ -5,6 +5,7 @@ use crate::errors::HikyakuResult;
 
 // This regex is used to parse the input path into namespace, and path components.
 const FILE_SYSTEM_NAMESPACE_PATH_REGEX: &str = r"^/*([^/]+)/?(.*?[^/])?/*$";
+const FILE_SYSTEM_KEY_SPLIT_REGEX: &str = r"^(/?.*[^/]+)$";
 
 #[derive(Debug)]
 /// File path parser result.

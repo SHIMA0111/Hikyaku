@@ -8,6 +8,12 @@ pub enum HikyakuError {
     GoogleDriveError(String),
     #[error("Failed to the box process: {0}")]
     BoxError(String),
+    #[error("Failed to build: {0}")]
+    BuilderError(String),
     #[error("Get invalid argument error: {0}")]
     InvalidArgumentError(String),
+    #[error("Env credential error: {0}")]
+    EnvCredentialError(String),
+    #[error("Connection error: {0}")]
+    ConnectionError(String),
 }
