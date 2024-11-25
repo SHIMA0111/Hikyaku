@@ -8,9 +8,9 @@ use reqwest::Client;
 use aws_sdk_s3::client::Client as S3Client;
 use log::error;
 use reqwest::header::AUTHORIZATION;
-use crate::errors::HikyakuError::{BuilderError, ConnectionError, GoogleDriveError, InvalidArgumentError};
+use crate::errors::HikyakuError::{BuilderError, ConnectionError, GoogleDriveError, InvalidArgumentError, UnknownError};
 use crate::errors::HikyakuResult;
-use crate::types::google_drive::{DriveFileInfo, DriveFileQueryResponse, SharedDriveQueryResponse};
+use crate::types::google_drive::{DriveFileInfo, DriveFileQueryResponse, GoogleDriveFile, SharedDriveQueryResponse};
 use crate::utils::credential::Credential;
 use crate::utils::credential::google_drive_credential::{GoogleDriveCredential, GoogleDriveTokens};
 use crate::utils::credential::s3_credential::S3Credential;
@@ -110,55 +110,133 @@ impl FileSystemBuilder<GoogleDriveCredential> {
         };
     }
 
-    async fn get_file_id_and_mime_type(&self, shared_drive_name: &str) -> HikyakuResult<(String, FileType)> {
+    async fn resolve_path_to_existing_depth(&self, shared_drive_name: Option<&str>, path: &str) -> HikyakuResult<(Option<GoogleDriveFile>, Vec<String>)> {
         let client = Client::new();
-        let response = client
-            .get("https://www.googleapis.com/drive/v3/drives")
-            .query(&[("q", format!("name = '{}'", shared_drive_name))])
-            .header(AUTHORIZATION, format!("Bearer {}", self.file_system_credential.get_credential().get_access_token()))
-            .send()
-            .await
-            .map_err(|e| {
-                error!("Failed to send request to Google Drive API: {:#?}", e);
-                ConnectionError(format!("Failed to send request to Google Drive API: {:?}", e))
-            })?;
 
-        let shared_drive_ids = response
-            .json::<SharedDriveQueryResponse>()
-            .await
-            .map_err(|e| GoogleDriveError(format!("Failed to parse response from Google Drive API: {:?}", e)))?;
+        let shared_drive_ids = if let Some(shared_drive_name) = shared_drive_name {
+            let response = client
+                .get("https://www.googleapis.com/drive/v3/drives")
+                .query(&[("q", format!("name = '{}'", shared_drive_name))])
+                .header(AUTHORIZATION, format!("Bearer {}", self.file_system_credential.get_credential().get_access_token()))
+                .send()
+                .await
+                .map_err(|e| {
+                    error!("Failed to send request to Google Drive API: {:#?}", e);
+                    ConnectionError(format!("Failed to send request to Google Drive API: {:?}", e))
+                })?;
 
-        if shared_drive_ids.is_empty() {
-            return Err(InvalidArgumentError(format!("Shared drive name: '{}' is not found", shared_drive_name)));
+            let shared_drive_ids = response
+                .json::<SharedDriveQueryResponse>()
+                .await
+                .map_err(|e| GoogleDriveError(format!("Failed to parse response from Google Drive API: {:?}", e)))?;
+
+            if shared_drive_ids.is_empty() {
+                return Err(InvalidArgumentError(format!("Shared drive name: '{}' is not found", shared_drive_name)));
+            }
+
+            shared_drive_ids
+                .get_drives()
+                .iter()
+                .map(|shared_drive| shared_drive.id)
+                .collect::<Vec<_>>()
+        } else {
+            vec![]
+        };
+
+        let components = Path::new(path)
+            .components()
+            // Component::CurDir never contains root dir due to the parse input, the first '/'(slash) was eliminated.
+            .collect::<Vec<_>>();
+        if components.iter().any(|component| matches!(component, Component::CurDir | Component::ParentDir)) {
+            return Err(InvalidArgumentError(format!("File path cannot contain metacharacter to avoid ambiguous path. but got: {}", path)));
         }
 
-        let shared_drive_ids = shared_drive_ids
-            .get_drives()
+        if components.iter().any(|component| component.as_os_str().to_str().is_none()) {
+            return Err(InvalidArgumentError(format!("File path cannot contain non-ASCII character. but got: {}", path)));
+        }
+
+        let path_names = components
             .iter()
-            .map(|shared_drive| shared_drive.id)
+            // SAFETY: The components always can convert to String by the above validation.
+            .map(|component| component.as_os_str().to_str().unwrap().to_string())
+            .collect::<Vec<_>>();
+        let mut complete_explore_path = vec![];
+
+        let mut parent_infos = shared_drive_ids
+            .iter()
+            .map(|id| GoogleDriveFile::new(id, "", None))
+            .collect::<Vec<_>>();
+        for name in &path_names {
+            complete_explore_path.push(name.clone());
+            let mut query = format!("name = '{}'", name);
+            for parent_info in &parent_infos {
+                query.push_str(&format!(" and '{}' in parents", parent_info.get_id()));
+            }
+
+            let response = client
+                .get("https://www.googleapis.com/drive/v3/files")
+                .header(AUTHORIZATION, format!("Bearer {}", self.file_system_credential.get_credential().get_access_token()))
+                .query(&[
+                    ("q", &query),
+                    ("supportsAllDrives", &"true".to_string()),
+                    ("includeItemsFromAllDrives", &"true".to_string()),
+                    ("fields", &"files(id, mimeType, size)".to_string()),
+                ])
+                .send()
+                .await
+                .map_err(|e| {
+                    error!("Failed to send request to Google Drive API: {:#?}", e);
+                    ConnectionError(format!("Failed to send request to Google Drive API: {:?}", e))
+                })?;
+
+            if !response.status().is_success() {
+                error!("Failed to query files for Google Drive API: {}", response.status());
+                return Err(ConnectionError(format!("Failed to query files for Google Drive API: {}", response.status())));
+            }
+
+            let query_response = response
+                .json::<DriveFileQueryResponse>()
+                .await
+                .map_err(|e| UnknownError(format!("Failed to parse response from Google Drive API: {:#?}", e)))?;
+
+            if query_response.is_empty() {
+                break
+            }
+            else {
+                parent_infos.clear();
+                for file in query_response.files() {
+                    let size = if let Some(size) = file.size() {
+                        // Google Drive API returns the file size via JSON string. When it cannot parse to i64, it treats as -1 for handling.
+                        if size < 0 {
+                            return Err(GoogleDriveError("Google Drive returns invalid size information. If this issue occurs, please report to the author.".to_string()));
+                        }
+
+                        Some(size as u64)
+                    } else {
+                        None
+                    };
+                    parent_infos.push(GoogleDriveFile::new(&file.id, &file.mime_type, size))
+                }
+            }
+        }
+        if parent_infos.len() >= 2 {
+            return Err(InvalidArgumentError(format!("File path '{}' is ambiguous. There is multiple files on the same path in Google Drive.", path)));
+        }
+
+        let res = if parent_infos.is_empty() {
+            None
+        } else {
+            // SAFETY: The parent_infos has always only 1 content in this branch
+            // because the length is not empty and parent_infos.len() < 2.
+            Some(parent_infos.pop().unwrap())
+        };
+        let remain_path = path_names
+            .iter()
+            .filter(|name| !complete_explore_path.contains(name))
+            .map(String::from)
             .collect::<Vec<_>>();
 
-        let query_file_id = |drive_ids: &[String], file_path: &str| -> HikyakuResult<Vec<DriveFileInfo>> {
-            let components = Path::new(file_path)
-                .components()
-                // Component::CurDir never contains root dir due to the parse input, the first '/'(slash) was eliminated.
-                .collect::<Vec<_>>();
-            if components.iter().any(|component| matches!(component, Component::CurDir | Component::ParentDir)) {
-                return Err(InvalidArgumentError(format!("File path cannot contain metacharacter to avoid ambiguous path. but got: {}", file_path)));
-            }
-
-            if components.iter().any(|component| component.as_os_str().to_str().is_none()) {
-                return Err(InvalidArgumentError(format!("File path cannot contain non-ASCII character. but got: {}", file_path)));
-            }
-
-            let path_names = components
-                .iter()
-                // SAFETY: The components always can convert to String by the above validation.
-                .map(|component| component.as_os_str().to_str().unwrap().to_string())
-                .collect::<Vec<_>>();
-
-            let last_file_info: Option<DriveFileQueryResponse> =
-        }
+        Ok((res, remain_path))
     }
 }
 

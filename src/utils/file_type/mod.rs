@@ -1,6 +1,9 @@
+mod infer_type;
+
 use std::ffi::OsStr;
 use std::path::Path;
 
+#[derive(Debug, Copy, Clone, Eq, Hash, Ord, PartialOrd, PartialEq)]
 pub(crate) enum FileType {
     Json,
     Xml,
@@ -192,7 +195,12 @@ impl FileType {
             _ => FileType::Unknown
         }
     }
-    
+
+    pub(crate) fn from_file_path<P: AsRef<Path>>(file_path: P) -> Self {
+        let path = file_path.as_ref();
+
+    }
+
     pub(crate) fn from_mime(mime: &str) -> Self {
         match mime {
             "application/json" => FileType::Json,

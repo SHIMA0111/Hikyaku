@@ -16,4 +16,6 @@ pub enum HikyakuError {
     EnvCredentialError(String),
     #[error("Connection error: {0}")]
     ConnectionError(String),
+    #[error("Unknown error: {0}")]
+    UnknownError(String),
 }
