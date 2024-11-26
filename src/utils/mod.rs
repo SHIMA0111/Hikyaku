@@ -4,3 +4,4 @@ pub mod region;
 pub(crate) mod parser;
 pub mod credential;
 pub(crate) mod file_type;
+pub(crate) mod reqwest;

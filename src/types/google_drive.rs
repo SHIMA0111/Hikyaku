@@ -82,5 +82,15 @@ impl GoogleDriveFile {
         matches!(self.mime_type, FileType::GoogleDriveFile)
     }
 
-    pub(crate) fn get_id(&self) -> &str {}
+    pub(crate) fn get_id(&self) -> &str {
+        &self.id
+    }
+
+    pub(crate) fn get_mime(&self) -> &str {
+        self.mime_type.mime()
+    }
+
+    pub(crate) fn get_size(&self) -> Option<u64> {
+        self.size
+    }
 }

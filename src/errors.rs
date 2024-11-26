@@ -6,8 +6,10 @@ pub enum HikyakuError {
     OAuth2Error(String),
     #[error("Failed to the google drive process: {0}")]
     GoogleDriveError(String),
-    #[error("Failed to the box process: {0}")]
-    BoxError(String),
+    #[error("Failed to the s3 process: {0}")]
+    S3Error(String),
+    #[error("Failed to parse: {0}")]
+    ParseError(String),
     #[error("Failed to build: {0}")]
     BuilderError(String),
     #[error("Get invalid argument error: {0}")]

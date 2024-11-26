@@ -1,3 +1,4 @@
+use std::path::{Component, Path, PathBuf};
 use log::error;
 use regex::Regex;
 use crate::errors::HikyakuError::InvalidArgumentError;
@@ -5,7 +6,6 @@ use crate::errors::HikyakuResult;
 
 // This regex is used to parse the input path into namespace, and path components.
 const FILE_SYSTEM_NAMESPACE_PATH_REGEX: &str = r"^/*([^/]+)/?(.*?[^/])?/*$";
-const FILE_SYSTEM_KEY_SPLIT_REGEX: &str = r"^(/?.*[^/]+)$";
 
 #[derive(Debug)]
 /// File path parser result.
@@ -149,6 +149,29 @@ pub(crate) fn file_system_prefix_parser(input: &str) -> HikyakuResult<FileSystem
             path,
         })
     }
+}
+
+pub(crate) fn path_to_names_vec(path: &str, allow_metacharacter: bool) -> HikyakuResult<Vec<String>> {
+    let components = Path::new(path)
+        .components()
+        // Component::CurDir never contains root dir due to the parse input, the first '/'(slash) was eliminated.
+        .collect::<Vec<_>>();
+
+    if !allow_metacharacter && components.iter().any(|component| matches!(component, Component::CurDir | Component::ParentDir)) {
+        return Err(InvalidArgumentError(format!("File path cannot contain metacharacter to avoid ambiguous path. got: {}", path)));
+    }
+
+    if components.iter().any(|component| component.as_os_str().to_str().is_none()) {
+        return Err(InvalidArgumentError(format!("File path cannot contain non-ASCII character. but got: {}", path)));
+    }
+
+    let path_names = components
+        .iter()
+        // SAFETY: The components always can convert to String by the above validation.
+        .map(|component| component.as_os_str().to_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+
+    Ok(path_names)
 }
 
 #[cfg(test)]
