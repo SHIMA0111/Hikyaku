@@ -25,7 +25,7 @@ impl SharedDriveQueryResponse {
 #[derive(Deserialize, Debug)]
 pub(crate) struct DriveFileInfo {
     pub(crate) id: String,
-    #[serde(mimeType)]
+    #[serde(rename = "mimeType")]
     pub(crate) mime_type: String,
     size: Option<String>,
 }
@@ -53,6 +53,7 @@ impl DriveFileQueryResponse {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct GoogleDriveFile {
     id: String,
     mime_type: FileType,

@@ -35,7 +35,7 @@ impl<C: Credential> FileSystemBuilder<C> {
         }
     }
 
-    pub async fn add_file_path(&self, path: &str) -> HikyakuResult<&Self> {
+    pub fn add_file_path(self, path: &str) -> HikyakuResult<Self> {
         let parse_res = file_system_prefix_parser(path)?;
         *self.file_info.borrow_mut() = Some(parse_res);
 

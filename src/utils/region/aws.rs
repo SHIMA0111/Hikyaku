@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::str::FromStr;
 use aws_config::meta::region::ProvideRegion;
 use aws_config::{Region as AwsConfigRegion};

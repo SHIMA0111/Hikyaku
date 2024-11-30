@@ -1,7 +1,6 @@
 use std::fmt::{Display, Formatter};
-use axum::http::HeaderValue;
 use reqwest::{header, Client};
-use reqwest::header::AUTHORIZATION;
+use reqwest::header::{HeaderValue, AUTHORIZATION};
 use crate::errors::HikyakuError::{BuilderError, ParseError};
 use crate::errors::HikyakuResult;
 

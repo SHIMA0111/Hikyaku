@@ -1,10 +1,7 @@
-use std::path::{Component, Path};
 use std::sync::Arc;
-use axum::http::header::AUTHORIZATION;
-use log::error;
-use reqwest::{header, Client};
-use reqwest::header::HeaderValue;
-use crate::errors::HikyakuError::{BuilderError, ConnectionError, GoogleDriveError, InvalidArgumentError, ParseError, UnknownError};
+use log::{error, info};
+use reqwest::{Client};
+use crate::errors::HikyakuError::{BuilderError, ConnectionError, GoogleDriveError, InvalidArgumentError, UnknownError};
 use crate::errors::HikyakuResult;
 use crate::services::file_system::FileSystemObject;
 use crate::services::file_system_builder::FileSystemBuilder;
@@ -47,17 +44,25 @@ impl FileSystemBuilder<GoogleDriveCredential> {
                 None),
         };
 
+        let upload_filename = if path.is_empty() {
+            None
+        } else {
+            Some(path.rsplit_once("/")
+                .map(|(_, file_name)| file_name.to_string())
+                .unwrap_or(path))
+        };
+
         let file_obj = FileSystemObject::GoogleDrive {
             clients,
             google_drive_token: Arc::new(self.file_system_credential.get_credential()),
             queryable_file_or_parent_id,
             not_exist_file_paths: not_exist_paths,
-            upload_filename: None,
+            upload_filename,
             mime_type,
             file_size,
         };
 
-        todo!()
+        Ok(file_obj)
     }
 
 
@@ -79,12 +84,14 @@ impl FileSystemBuilder<GoogleDriveCredential> {
     /// The first element is an `Option` with the `GoogleDriveFile` corresponding to the most deeply
     /// existing file or folder. The second element is a vector of the path component names that do not exist on the current GoogleDrive.
     async fn resolve_path_to_existing_depth(&self, shared_drive_name: Option<&str>, path: &str) -> HikyakuResult<(Option<GoogleDriveFile>, Vec<String>)> {
-        let token = self.file_system_credential.get_credential().get_access_token();
-        let client = get_client_with_token(token, Bearer)?;
-        
-        let shared_drive_ids = shared_drive_name
-            .map(async |name| get_shared_drive(&client, name).await)
-            .unwrap_or(Ok(vec![]))?;
+        let client = get_client_with_token(
+            self.file_system_credential.get_credential().get_access_token(),
+            Bearer)?;
+
+        let shared_drive_ids = match shared_drive_name {
+            Some(name) => get_shared_drive(&client, name).await?,
+            None => vec![]
+        };
 
         let path_names = path_to_names_vec(path, false)?;
 
@@ -93,11 +100,11 @@ impl FileSystemBuilder<GoogleDriveCredential> {
         let mut parent_infos = initial_parents(&shared_drive_ids);
 
         for name in &path_names {
-            complete_explore_path_num += 1;
             let query_response = query_drive_files(&client, name, &parent_infos).await?;
             if query_response.is_empty() {
                 break
             }
+            complete_explore_path_num += 1;
 
             parent_infos = query_response;
         }
@@ -158,7 +165,7 @@ async fn get_shared_drive(client: &Client, shared_drive_name: &str) -> HikyakuRe
     let ids = shared_drive_ids
         .get_drives()
         .iter()
-        .map(|shared_drive| shared_drive.id)
+        .map(|shared_drive| shared_drive.id.clone())
         .collect::<Vec<_>>();
 
     Ok(ids)
@@ -250,10 +257,10 @@ async fn query_drive_files(client: &Client, file_or_folder_name: &str, parents: 
 ///
 /// `String` - The constructed query statement to be used in Google Drive API requests.
 fn query_statement_builder(file_folder_name: &str, parents: &[GoogleDriveFile]) -> String {
-    let mut query = format!("name = '{}'", file_folder_name);
+    let query = format!("name = '{}'", file_folder_name);
     let mut parents_query = vec![];
-    for (parent_info) in &parents {
-        parents_query.push(&format!("'{}' in parents", parent_info.get_id()));
+    for parent_info in parents {
+        parents_query.push(format!("'{}' in parents", parent_info.get_id()));
     }
     if parents_query.len() > 0 {
         format!("{} and ({})", query, parents_query.join(" or "))
@@ -262,4 +269,30 @@ fn query_statement_builder(file_folder_name: &str, parents: &[GoogleDriveFile]) 
         query
     }
 
+}
+
+#[cfg(test)]
+mod tests {
+    use log::info;
+    use time::{Duration, OffsetDateTime};
+    use super::*;
+
+    #[tokio::test]
+    async fn test_build_google_drive() {
+        let cred = GoogleDriveCredential::new(
+            "<AccessToken>",
+            "",
+            OffsetDateTime::now_utc() + Duration::hours(1),
+        );
+
+        let file_obj = FileSystemBuilder::from(cred)
+            .add_file_path("gd://WorkSpace/app/kintai-app/src/App.tsx")
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
+
+        assert!(file_obj.to_string().contains("1f5oT0CAHv-BjZs72WnL8vGoN0TkZF8g7"));
+        assert!(file_obj.to_string().contains("file_size: Some(804)"))
+    }
 }

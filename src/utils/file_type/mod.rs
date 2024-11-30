@@ -196,10 +196,10 @@ impl FileType {
         }
     }
 
-    pub(crate) fn from_file_path<P: AsRef<Path>>(file_path: P) -> Self {
-        let path = file_path.as_ref();
-
-    }
+    // pub(crate) fn from_file_path<P: AsRef<Path>>(file_path: P) -> Self {
+    //     let path = file_path.as_ref();
+    //
+    // }
 
     pub(crate) fn from_mime(mime: &str) -> Self {
         match mime {
