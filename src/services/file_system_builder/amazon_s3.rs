@@ -83,13 +83,13 @@ mod tests {
     async fn test_build_amazon_s3() {
         let cred =  S3Credential::from_env().await.unwrap();
         let file_obj = FileSystemBuilder::from(cred)
-            .add_file_path("s3://palworld-backup-repo/palworld_backup.tar.gz")
+            .add_file_path("s3://test-bucket-hikyaku/datas/titanic/train.csv")
             .unwrap()
             .build()
             .await
             .unwrap();
 
         assert!(file_obj.to_string().contains("AmazonS3"));
-        assert!(file_obj.to_string().contains("palworld-backup-repo.tar.gz"));
+        assert!(file_obj.to_string().contains("train.csv"));
     }
 }

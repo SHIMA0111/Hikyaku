@@ -4,7 +4,6 @@ use crate::utils::file_type::FileType;
 #[derive(Deserialize, Debug)]
 pub(crate) struct SharedDriveInfo {
     pub(crate) id: String,
-    pub(crate) name: String,
 }
 
 #[derive(Deserialize, Debug)]

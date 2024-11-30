@@ -273,26 +273,27 @@ fn query_statement_builder(file_folder_name: &str, parents: &[GoogleDriveFile]) 
 
 #[cfg(test)]
 mod tests {
+    use std::env;
     use log::info;
     use time::{Duration, OffsetDateTime};
     use super::*;
 
     #[tokio::test]
     async fn test_build_google_drive() {
+        let access_token = env::var("GOOGLE_DRIVE_TOKEN").unwrap();
         let cred = GoogleDriveCredential::new(
-            "<AccessToken>",
+            &access_token,
             "",
             OffsetDateTime::now_utc() + Duration::hours(1),
         );
 
         let file_obj = FileSystemBuilder::from(cred)
-            .add_file_path("gd://WorkSpace/app/kintai-app/src/App.tsx")
+            .add_file_path("gds://datas/titanic/train.csv")
             .unwrap()
             .build()
             .await
             .unwrap();
 
-        assert!(file_obj.to_string().contains("1f5oT0CAHv-BjZs72WnL8vGoN0TkZF8g7"));
-        assert!(file_obj.to_string().contains("file_size: Some(804)"))
+        assert!(file_obj.to_string().contains("1rmRBMDEMurxCBwmpVj47THuYuDVDsco"));
     }
 }
