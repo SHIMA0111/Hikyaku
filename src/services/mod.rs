@@ -1,5 +1,5 @@
-mod file_system;
-mod file_system_builder;
+pub mod file_system;
+pub mod file_system_builder;
 
 use async_trait::async_trait;
 

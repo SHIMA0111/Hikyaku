@@ -3,32 +3,33 @@ use log::error;
 use regex::Regex;
 use crate::errors::HikyakuError::InvalidArgumentError;
 use crate::errors::HikyakuResult;
+use crate::types::FileInfo;
 
 // This regex is used to parse the input path into namespace, and path components.
 const FILE_SYSTEM_NAMESPACE_PATH_REGEX: &str = r"^/*([^/]+)/?(.*?[^/])?/*$";
 
 #[derive(Debug)]
 /// File path parser result.
-pub(crate) struct FileSystemParseResult {
+pub struct FileSystemParseResult {
     prefix: String,
     namespace: Option<String>,
     path: String,
 }
 
-impl FileSystemParseResult {
+impl FileInfo for FileSystemParseResult {
     /// Get prefix(e.x. `s3://`, `file://`, and so)
-    pub(crate) fn get_prefix(&self) -> &str {
+    fn get_prefix(&self) -> &str {
         &self.prefix
     }
 
-    /// Get namespace(S3 bucket name, Google Drive SharedDrive name).  
+    /// Get namespace(S3 bucket name, Google Drive SharedDrive name).
     /// If the file system has no namespace, return [None].
-    pub(crate) fn get_namespace(&self) -> Option<&str> {
+    fn get_namespace(&self) -> Option<&str> {
         self.namespace.as_deref()
     }
 
     /// Get path except for namespace(`file://` and `gd://` has no namespace so all path is parsed)
-    pub(crate) fn get_path(&self) -> &str {
+    fn get_path(&self) -> &str {
         &self.path
     }
 }
@@ -177,6 +178,7 @@ pub(crate) fn path_to_names_vec(path: &str, allow_metacharacter: bool) -> Hikyak
 #[cfg(test)]
 mod tests {
     use crate::errors::HikyakuError::InvalidArgumentError;
+    use crate::types::FileInfo;
     use super::file_system_prefix_parser;
     
     #[test]

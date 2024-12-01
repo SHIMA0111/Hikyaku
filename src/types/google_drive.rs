@@ -1,5 +1,55 @@
 use serde::Deserialize;
+use crate::types::FileInfo;
 use crate::utils::file_type::FileType;
+use crate::utils::parser::FileSystemParseResult;
+
+
+/// Represents different types of file information for Google Drive.
+///
+/// The `GoogleDriveFileInfo` enum encapsulates variations in the way
+/// Google Drive file information can be represented, which may be through
+/// parsed file system results, parent IDs with specified file paths, or direct 
+/// file IDs.
+pub enum GoogleDriveFileInfo {
+    Parsed(FileSystemParseResult),
+    ParentId {
+        parent_ids: Vec<String>,
+        file_path: String,
+    },
+    FileId(String),
+}
+
+impl FileInfo for GoogleDriveFileInfo {
+    fn get_prefix(&self) -> &str {
+        match self {
+            GoogleDriveFileInfo::Parsed(parsed) => parsed.get_prefix(),
+            GoogleDriveFileInfo::ParentId {..} => "",
+            GoogleDriveFileInfo::FileId(_) => "",
+        }
+    }
+
+    fn get_namespace(&self) -> Option<&str> {
+        match self {
+            GoogleDriveFileInfo::Parsed(parsed) => parsed.get_namespace(),
+            GoogleDriveFileInfo::ParentId {..} => None,
+            GoogleDriveFileInfo::FileId(_) => None,
+        }
+    }
+
+    fn get_path(&self) -> &str {
+        match self { 
+            GoogleDriveFileInfo::Parsed(parsed) => parsed.get_path(),
+            GoogleDriveFileInfo::ParentId {file_path, ..} => file_path,
+            GoogleDriveFileInfo::FileId(_) => "",
+        }
+    }
+}
+
+impl From<FileSystemParseResult> for GoogleDriveFileInfo {
+    fn from(value: FileSystemParseResult) -> Self {
+        GoogleDriveFileInfo::Parsed(value)
+    }
+}
 
 #[derive(Deserialize, Debug)]
 pub(crate) struct SharedDriveInfo {
@@ -27,6 +77,7 @@ pub(crate) struct DriveFileInfo {
     #[serde(rename = "mimeType")]
     pub(crate) mime_type: String,
     size: Option<String>,
+    pub(crate) name: String,
 }
 
 impl DriveFileInfo {

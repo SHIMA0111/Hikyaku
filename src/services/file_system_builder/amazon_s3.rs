@@ -5,10 +5,46 @@ use crate::errors::HikyakuError::{BuilderError, InvalidArgumentError};
 use crate::errors::{HikyakuError, HikyakuResult};
 use crate::services::file_system::FileSystemObject;
 use crate::services::file_system_builder::FileSystemBuilder;
+use crate::types::FileInfo;
 use crate::utils::credential::Credential;
 use crate::utils::credential::s3_credential::S3Credential;
+use crate::utils::parser::FileSystemParseResult;
 
-impl FileSystemBuilder<S3Credential> {
+impl FileSystemBuilder<S3Credential, FileSystemParseResult> {
+    /// Builds a `FileSystemObject` for Amazon S3 using specified credentials and file information.
+    ///
+    /// This function validates the file path to ensure it has the "s3://" prefix and then
+    /// extracts the bucket and key information. It loads AWS configuration using the given
+    /// credentials, creates S3 clients and retrieves the file size for the given object.
+    ///
+    /// # Returns
+    ///
+    /// * `HikyakuResult<FileSystemObject>` - A result containing the `FileSystemObject` if successful,
+    ///   otherwise an `InvalidArgumentError` or `BuilderError` on failure.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `InvalidArgumentError` if the file prefix is not "s3://".
+    /// Returns a `BuilderError` if the bucket name cannot be found or the path is not set.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use hikyaku::utils::credential::s3_credential::S3Credential;
+    /// use hikyaku::services::file_system_builder::FileSystemBuilder;
+    ///
+    /// async fn example() {
+    ///     let cred = S3Credential::from_env().await.unwrap();
+    ///     let file_obj = FileSystemBuilder::from(cred)
+    ///         .set_file_path("s3://bucket-name/path/to/file")
+    ///         .unwrap()
+    ///         .build()
+    ///         .await
+    ///         .unwrap();
+    ///     
+    ///     assert!(file_obj.to_string().contains("AmazonS3"));
+    /// }
+    /// ```
     pub async fn build(self) -> HikyakuResult<FileSystemObject> {
         let (bucket, key) = match self.file_info.borrow().as_ref() {
             Some(file_info) => {
@@ -83,7 +119,7 @@ mod tests {
     async fn test_build_amazon_s3() {
         let cred =  S3Credential::from_env().await.unwrap();
         let file_obj = FileSystemBuilder::from(cred)
-            .add_file_path("s3://test-bucket-hikyaku/datas/titanic/train.csv")
+            .set_file_path("s3://test-bucket-hikyaku/datas/titanic/train.csv")
             .unwrap()
             .build()
             .await

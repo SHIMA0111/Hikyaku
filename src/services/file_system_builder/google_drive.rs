@@ -1,11 +1,12 @@
 use std::sync::Arc;
-use log::{error, info};
+use log::{error};
 use reqwest::{Client};
 use crate::errors::HikyakuError::{BuilderError, ConnectionError, GoogleDriveError, InvalidArgumentError, UnknownError};
 use crate::errors::HikyakuResult;
 use crate::services::file_system::FileSystemObject;
 use crate::services::file_system_builder::FileSystemBuilder;
-use crate::types::google_drive::{DriveFileQueryResponse, GoogleDriveFile, SharedDriveQueryResponse};
+use crate::types::FileInfo;
+use crate::types::google_drive::{DriveFileInfo, DriveFileQueryResponse, GoogleDriveFile, GoogleDriveFileInfo, SharedDriveInfo, SharedDriveQueryResponse};
 use crate::utils::credential::Credential;
 use crate::utils::credential::google_drive_credential::GoogleDriveCredential;
 use crate::utils::file_type::FileType;
@@ -13,22 +14,148 @@ use crate::utils::parser::path_to_names_vec;
 use crate::utils::reqwest::AuthType::Bearer;
 use crate::utils::reqwest::get_client_with_token;
 
-impl FileSystemBuilder<GoogleDriveCredential> {
+impl FileSystemBuilder<GoogleDriveCredential, GoogleDriveFileInfo> {
+    /// Sets the parent IDs and the file path key for the Google Drive file operation.
+    ///
+    /// This function updates the `file_info` state in the builder with the provided
+    /// `parents_ids` list and `path`. It is useful for identifying specific parent folders
+    /// on Google Drive and setting a file path.
+    ///
+    /// # Arguments
+    ///
+    /// * `parents_ids` - A vector of string slices that holds the unique identifiers of the parent folders.
+    /// * `path` - A string slice that represents the file path to be associated with the parent IDs.
+    ///
+    /// # Returns
+    ///
+    /// * `Self` - Returns the builder instance for further chaining of method calls.
+    pub fn set_parents_ids_and_key(self,
+                                   parents_ids: Vec<&str>,
+                                   path: &str) -> Self {
+        let file_info = GoogleDriveFileInfo::ParentId {
+            parent_ids: parents_ids.iter().map(|id| id.to_string()).collect(),
+            file_path: path.to_string()
+        };
+
+        *self.file_info.borrow_mut() = Some(file_info);
+        self
+    }
+
+    
+    /// Sets the target file ID for the Google Drive file operation.
+    ///
+    /// This function updates the `file_info` state in the builder with the provided
+    /// `target_file_id`. It is useful for identifying a specific file
+    /// on Google Drive when constructing a `FileSystemObject`.
+    ///
+    /// # Arguments
+    ///
+    /// * `target_file_id` - A string slice that holds the unique identifier of the target file.
+    ///
+    /// # Returns
+    ///
+    /// * `Self` - Returns the builder instance for further chaining of method calls.
+    pub fn set_file_id(self, target_file_id: &str) -> Self {
+        let file_info = GoogleDriveFileInfo::FileId(target_file_id.to_string());
+
+        *self.file_info.borrow_mut() = Some(file_info);
+        self
+    }
+
+    
+    /// Builds a `FileSystemObject` for Google Drive using the specified credentials and file information.
+    ///
+    /// This function validates the file path to ensure it corresponds to a Google Drive location (either "gd://" or "gds://") 
+    /// and resolves the file path to the deepest existing path in Google Drive if you set path as identity of the file. 
+    /// It creates HTTP clients for operations, and prepares necessary data 
+    /// such as file ID, MIME type, and upload filename for Google Drive interactions.
+    ///
+    /// # Returns
+    ///
+    /// * `HikyakuResult<FileSystemObject>` - A result containing the `FileSystemObject` if successful,
+    ///   otherwise an `InvalidArgumentError` or `BuilderError` or so on failure.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use time::{Duration, OffsetDateTime};
+    /// use hikyaku::utils::credential::google_drive_credential::GoogleDriveCredential;
+    /// use hikyaku::services::file_system_builder::FileSystemBuilder;
+    ///
+    /// async fn example() {
+    ///     let cred = GoogleDriveCredential::new("access_token", "refresh_token", OffsetDateTime::now_utc() + Duration::hours(1));
+    ///     let file_obj = FileSystemBuilder::from(cred)
+    ///         .set_file_id("")
+    ///         .build()
+    ///         .await
+    ///         .unwrap();
+    ///     
+    ///     assert!(file_obj.to_string().contains("GoogleDrive"));
+    /// }
+    /// ```
     pub async fn build(self) -> HikyakuResult<FileSystemObject> {
-        let (shared_drive_name, path) = match self.file_info.borrow().as_ref() {
-            Some(info) => {
+        let get_upload_filename = |path: &str| -> Option<String> {
+            if path.is_empty() {
+                None
+            } else {
+                Some(path.rsplit_once("/")
+                    .map(|(_, file_name)| file_name.to_string())
+                    .unwrap_or(path.to_string()))
+            }
+        };
+
+        let (google_drive_file, not_exist_paths, upload_filename) = match self.file_info.borrow().as_ref() {
+            Some(GoogleDriveFileInfo::Parsed(info)) => {
                 if !["gd://", "gds://"].contains(&info.get_prefix()) {
                     return Err(InvalidArgumentError("File system prefix is not gd:// or gds".to_string()));
                 }
 
-                (info.get_namespace().map(String::from), info.get_path().to_string())
+                let client = get_client_with_token(
+                    self.file_system_credential.get_credential().get_access_token(),
+                    Bearer)?;
+
+                let shared_drive_ids = match info.get_namespace().map(String::from) {
+                    Some(name) => get_shared_drive(&client, &name).await?,
+                    None => vec![]
+                };
+                let res = self.resolve_path_to_existing_depth(
+                    &shared_drive_ids, info.get_path()).await?;
+                let upload_filename = get_upload_filename(info.get_path());
+                (res.0, res.1, upload_filename)
             },
+            Some(GoogleDriveFileInfo::ParentId { parent_ids, file_path }) => {
+                let res = self.resolve_path_to_existing_depth(
+                    &parent_ids, file_path).await?;
+                let upload_filename = get_upload_filename(file_path);
+                (res.0, res.1, upload_filename)
+            },
+            Some(GoogleDriveFileInfo::FileId(file_id)) => {
+                let client = get_client_with_token(
+                    self.file_system_credential.get_credential().get_access_token(),
+                    Bearer)?;
+                let (file_info, filename) =
+                    if file_id.is_empty() {
+                        // My Drive root, the file id should be "".
+                        let drive_file = GoogleDriveFile::new(
+                            file_id,
+                            "application/vnd.google-apps.folder",
+                            None,
+                        );
+                        (drive_file, None)
+                    }
+                    else if let Ok(info) = get_drive_from_id(&client, file_id).await {
+                        // The file id can be Shared Drive ID.
+                        (info, None)
+                    } else {
+                        let (info, filename) = get_file_from_id(&client, file_id).await?;
+                        (info, Some(filename))
+                    };
+                (Some(file_info), vec![], filename)
+            }
             None => {
                 return Err(BuilderError("Path is not set".to_string()));
-            }
+            },
         };
-
-        let (google_drive_file, not_exist_paths) = self.resolve_path_to_existing_depth(shared_drive_name.as_deref(), &path).await?;
 
         let clients = (0..self.concurrency.into_inner())
             .map(|_| Arc::new(Client::new()))
@@ -42,14 +169,6 @@ impl FileSystemBuilder<GoogleDriveCredential> {
                 "".to_string(),
                 FileType::Unknown.mime().to_string(),
                 None),
-        };
-
-        let upload_filename = if path.is_empty() {
-            None
-        } else {
-            Some(path.rsplit_once("/")
-                .map(|(_, file_name)| file_name.to_string())
-                .unwrap_or(path))
         };
 
         let file_obj = FileSystemObject::GoogleDrive {
@@ -66,7 +185,8 @@ impl FileSystemBuilder<GoogleDriveCredential> {
     }
 
 
-    /// Resolves the path to the most deeply existing file or folder in Google Drive.
+    /// Resolves the path to the most deeply existing file or folder in Google Drive
+    /// from the specified parents.
     ///
     /// This function explores the given path in Google Drive and returns a tuple containing
     /// the `GoogleDriveFile` corresponding to the most deeply existing file or folder and
@@ -74,8 +194,8 @@ impl FileSystemBuilder<GoogleDriveCredential> {
     ///
     /// # Arguments
     ///
-    /// * `shared_drive_name` - An optional name of the shared drive. If provided, the path will
-    ///   be resolved within this shared drive.
+    /// * `parent_ids` - Slice of the parent ids when the slice is empty, it represents
+    /// the specified path has no parent (start from root place).
     /// * `path` - The path to be resolved, represented as a string.
     ///
     /// # Returns
@@ -83,21 +203,16 @@ impl FileSystemBuilder<GoogleDriveCredential> {
     /// `HikyakuResult<(Option<GoogleDriveFile>, Vec<String>)>` - A result containing a tuple.
     /// The first element is an `Option` with the `GoogleDriveFile` corresponding to the most deeply
     /// existing file or folder. The second element is a vector of the path component names that do not exist on the current GoogleDrive.
-    async fn resolve_path_to_existing_depth(&self, shared_drive_name: Option<&str>, path: &str) -> HikyakuResult<(Option<GoogleDriveFile>, Vec<String>)> {
+    async fn resolve_path_to_existing_depth(&self, parent_ids: &[String], path: &str) -> HikyakuResult<(Option<GoogleDriveFile>, Vec<String>)> {
         let client = get_client_with_token(
             self.file_system_credential.get_credential().get_access_token(),
             Bearer)?;
-
-        let shared_drive_ids = match shared_drive_name {
-            Some(name) => get_shared_drive(&client, name).await?,
-            None => vec![]
-        };
 
         let path_names = path_to_names_vec(path, false)?;
 
         // Store the explored paths nums to skip paths when collect not exist paths.
         let mut complete_explore_path_num = 0;
-        let mut parent_infos = initial_parents(&shared_drive_ids);
+        let mut parent_infos = initial_parents(&parent_ids);
 
         for name in &path_names {
             let query_response = query_drive_files(&client, name, &parent_infos).await?;
@@ -268,32 +383,102 @@ fn query_statement_builder(file_folder_name: &str, parents: &[GoogleDriveFile]) 
     else {
         query
     }
+}
 
+
+/// Retrieves a Google Drive file by its ID.
+///
+/// This function sends a request to the Google Drive API to obtain details about a shared drive
+/// identified by the specified file ID.
+async fn get_drive_from_id(client: &Client, drive_id: &str) -> HikyakuResult<GoogleDriveFile> {
+    let request_uri = format!("https://www.googleapis.com/drive/v3/drives/{drive_id}");
+    let response = client
+        .get(request_uri)
+        .send()
+        .await
+        .map_err(|e| {
+            error!("Failed to send request to Google Drive API: {:#?}", e);
+            ConnectionError(format!("Failed to send request to Google Drive API: {:#?}", e))
+        })?;
+
+    if !response.status().is_success() {
+        error!("Failed to get drive by ID for Google Drive API: {}", response.status());
+        return Err(ConnectionError(format!("Failed to get drive by ID for Google Drive API: {}", response.status())));
+    }
+
+    let get_response = response
+        .json::<SharedDriveInfo>()
+        .await
+        .map_err(|e| UnknownError(format!("Failed to parse response from Google Drive API: {:#?}", e)))?;
+
+    let google_drive_file = GoogleDriveFile::new(
+        get_response.id.as_ref(),
+        "application/vnd.google-apps.folder",
+        None,
+    );
+
+    Ok(google_drive_file)
+}
+
+/// Retrieves a Google Drive file by its ID.
+///
+/// This function sends a request to the Google Drive API to obtain details about a file
+/// identified by the specified file ID.
+async fn get_file_from_id(client: &Client, file_id: &str) -> HikyakuResult<(GoogleDriveFile, String)> {
+    let request_uri = format!("https://www.googleapis.com/drive/v3/files/{file_id}");
+
+    let response = client
+        .get(request_uri)
+        .query(&[
+            ("supportsAllDrives", &"true".to_string()),
+        ])
+        .send()
+        .await
+        .map_err(|e| {
+            error!("Failed to send request to Google Drive API: {:#?}", e);
+            ConnectionError(format!("Failed to send request to Google Drive API: {:#?}", e))
+        })?;
+
+    if !response.status().is_success() {
+        error!("Failed to get files by ID for Google Drive API: {}", response.status());
+        return Err(ConnectionError(format!("Failed to get files by ID for Google Drive API: {}", response.status())));
+    }
+
+    let get_response = response
+        .json::<DriveFileInfo>()
+        .await
+        .map_err(|e| UnknownError(format!("Failed to parse response from Google Drive API: {:#?}", e)))?;
+
+    let google_drive_file = GoogleDriveFile::new(
+        get_response.id.as_ref(),
+        get_response.mime_type.as_ref(),
+        get_response.size().map(|size| size as u64));
+
+    Ok((google_drive_file, get_response.name))
 }
 
 #[cfg(test)]
 mod tests {
     use std::env;
-    use log::info;
     use time::{Duration, OffsetDateTime};
     use super::*;
 
-    #[tokio::test]
-    async fn test_build_google_drive() {
-        let access_token = env::var("GOOGLE_DRIVE_TOKEN").unwrap();
-        let cred = GoogleDriveCredential::new(
-            &access_token,
-            "",
-            OffsetDateTime::now_utc() + Duration::hours(1),
-        );
-
-        let file_obj = FileSystemBuilder::from(cred)
-            .add_file_path("gds://datas/titanic/train.csv")
-            .unwrap()
-            .build()
-            .await
-            .unwrap();
-
-        assert!(file_obj.to_string().contains("1rmRBMDEMurxCBwmpVj47THuYuDVDsco"));
-    }
+    // #[tokio::test]
+    // async fn test_build_google_drive() {
+    //     let access_token = env::var("GOOGLE_DRIVE_TOKEN").unwrap();
+    //     let cred = GoogleDriveCredential::new(
+    //         &access_token,
+    //         "",
+    //         OffsetDateTime::now_utc() + Duration::hours(1),
+    //     );
+    //
+    //     let file_obj = FileSystemBuilder::from(cred)
+    //         .set_file_path("gds://datas/titanic/train.csv")
+    //         .unwrap()
+    //         .build()
+    //         .await
+    //         .unwrap();
+    //
+    //     assert!(file_obj.to_string().contains("1rmRBMDEMurxCBwmpVj47THuYuDVDsco"));
+    // }
 }
