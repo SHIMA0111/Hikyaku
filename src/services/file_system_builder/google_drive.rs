@@ -212,7 +212,7 @@ impl FileSystemBuilder<GoogleDriveCredential, GoogleDriveFileInfo> {
 
         // Store the explored paths nums to skip paths when collect not exist paths.
         let mut complete_explore_path_num = 0;
-        let mut parent_infos = initial_parents(&parent_ids);
+        let mut parent_infos = initial_parents(parent_ids);
 
         for name in &path_names {
             let query_response = query_drive_files(&client, name, &parent_infos).await?;
@@ -463,22 +463,22 @@ mod tests {
     use time::{Duration, OffsetDateTime};
     use super::*;
 
-    // #[tokio::test]
-    // async fn test_build_google_drive() {
-    //     let access_token = env::var("GOOGLE_DRIVE_TOKEN").unwrap();
-    //     let cred = GoogleDriveCredential::new(
-    //         &access_token,
-    //         "",
-    //         OffsetDateTime::now_utc() + Duration::hours(1),
-    //     );
-    //
-    //     let file_obj = FileSystemBuilder::from(cred)
-    //         .set_file_path("gds://datas/titanic/train.csv")
-    //         .unwrap()
-    //         .build()
-    //         .await
-    //         .unwrap();
-    //
-    //     assert!(file_obj.to_string().contains("1rmRBMDEMurxCBwmpVj47THuYuDVDsco"));
-    // }
+    #[tokio::test]
+    async fn test_build_google_drive() {
+        let access_token = env::var("GOOGLE_DRIVE_TOKEN").unwrap();
+        let cred = GoogleDriveCredential::new(
+            &access_token,
+            "",
+            OffsetDateTime::now_utc() + Duration::hours(1),
+        );
+
+        let file_obj = FileSystemBuilder::from(cred)
+            .set_file_path("gds://datas/titanic/train.csv")
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
+
+        assert!(file_obj.to_string().contains("1rmRBMDEMurxCBwmpVj47THuYuDVDsco"));
+    }
 }
