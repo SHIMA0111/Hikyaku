@@ -1,3 +1,6 @@
+mod download;
+mod upload;
+
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -24,8 +27,24 @@ pub enum FileSystemObject {
     },
     Local {
         path: PathBuf,
+        is_dir: bool,
         file_size: Option<u64>
     },
+}
+
+impl FileSystemObject {
+    pub(crate) fn is_downloadable(&self) -> bool {
+        match self {
+            Self::AmazonS3 { file_size, .. } |
+            Self::GoogleDrive { file_size, .. } |
+            Self::Local { file_size, .. }=> {
+                match file_size {
+                    Some(_) => true,
+                    None => false,
+                }
+            },
+        }
+    }
 }
 
 impl Display for FileSystemObject {
@@ -42,7 +61,7 @@ impl Display for FileSystemObject {
                 file_size, ..} => {
                 write!(f, "GoogleDrive: queryable_file_or_parent_id: {}, not_exist_file_paths: {:?}, upload_filename: {:?}, mime_type: {}, file_size: {:?}", queryable_file_or_parent_id, not_exist_file_paths, upload_filename, mime_type, file_size)
             },
-            Self::Local {path, file_size} => {
+            Self::Local {path, file_size, ..} => {
                 write!(f, "Local: path: {}, file_size: {:?}", path.display(), file_size)
             }
         }

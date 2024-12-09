@@ -48,15 +48,15 @@ impl AuthCallback {
     }
 }
 
-pub(crate) async fn spawn_webserver(client: &BasicClient,
-                                    scopes: &[&str],
-                                    protocol: &str,
-                                    redirect_hostname: &str,
-                                    port: u16,
-                                    init_path: &str,
-                                    redirect_path: &str,
-                                    extra_args: &HashMap<String, String>,
-                                    sender: Sender<Token>) {
+pub(crate) async fn spawn_instant_webserver(client: &BasicClient,
+                                            scopes: &[&str],
+                                            protocol: &str,
+                                            redirect_hostname: &str,
+                                            port: u16,
+                                            init_path: &str,
+                                            redirect_path: &str,
+                                            extra_args: &HashMap<String, String>,
+                                            sender: Sender<Token>) {
     let shutdown_flag = Arc::new(AtomicBool::new(false));
 
     let state = AppState {

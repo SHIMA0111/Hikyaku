@@ -18,7 +18,7 @@ use crate::utils::oauth2::provider::Oauth2Provider;
 use crate::utils::oauth2::stores::{load_token, save_token};
 use crate::utils::oauth2::token_refresh::token_refresh;
 use crate::utils::oauth2::url_parser::extract_protocol_hostname;
-use crate::utils::oauth2::web_server::{spawn_webserver};
+use crate::utils::oauth2::web_server::{spawn_instant_webserver};
 
 /// Application Client Secret data.
 ///
@@ -64,12 +64,13 @@ impl SecretData {
                       server_base_uri: Option<&str>,
                       port: u16,
                       provider: Oauth2Provider) -> Self {
-        let (protocol, hostname) = extract_protocol_hostname(server_base_uri.unwrap_or("localhost"))
-            .unwrap_or_else(|e| {
-                error!("Failed to extract server base uri: {}", e);
-                warn!("Using default server base uri: localhost");
-                ("http".to_string(), "localhost".to_string())
-            });
+        let (protocol, hostname) =
+            extract_protocol_hostname(server_base_uri.unwrap_or("localhost"))
+                .unwrap_or_else(|e| {
+                    error!("Failed to extract server base uri: {}", e);
+                    warn!("Using default server base uri: localhost");
+                    ("http".to_string(), "localhost".to_string())
+                });
 
         Self {
             client_id: client_id.to_string(),
@@ -175,7 +176,8 @@ impl SecretData {
     /// it returns the access token. If the token is expired, it attempts to refresh the token using the
     /// refresh token. If the token scopes don't match, it requires re-authentication. If there is no token,
     /// it starts the OAuth2 flow to get a new token.
-    pub async fn get_access_token<TP: AsRef<Path>>(&self, scopes: &[&str],
+    pub async fn get_access_token<TP: AsRef<Path>>(&self,
+                                                   scopes: &[&str],
                                                    token_path: TP) -> Option<String> {
         let token_info = match load_token(self.provider.clone(), token_path.as_ref()) {
             Some(token_info) => {
@@ -199,11 +201,7 @@ impl SecretData {
             None => None
         };
 
-        let redirect_uri = if [443, 80].contains(&self.port) {
-            format!("{}://{}{}", self.protocol, self.redirect_hostname, self.redirect_path)
-        } else {
-            format!("{}://{}:{}{}", self.protocol, self.redirect_hostname, self.port, self.redirect_path)
-        };
+        let redirect_uri = self.get_redirect_uri();
 
         let client = BasicClient::new(
             ClientId::new(self.client_id.clone()),
@@ -229,7 +227,7 @@ impl SecretData {
 
         let (sender, mut receiver) =
             tokio::sync::mpsc::channel::<Token>(1);
-        spawn_webserver(
+        spawn_instant_webserver(
             &client,
             scopes,
             self.protocol.as_str(),
@@ -249,15 +247,19 @@ impl SecretData {
             None => None
         }
     }
+
+    fn get_redirect_uri(&self) -> String {
+        if [443, 80].contains(&self.port) {
+            format!("{}://{}{}", self.protocol, self.redirect_hostname, self.redirect_path)
+        } else {
+            format!("{}://{}:{}{}", self.protocol, self.redirect_hostname, self.port, self.redirect_path)
+        }
+    }
 }
 
 impl Display for SecretData {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let redirect_uri = if [443, 80].contains(&self.port) {
-            format!("{}://{}{}", self.protocol, self.redirect_hostname, self.redirect_path)
-        } else {
-            format!("{}://{}:{}{}", self.protocol, self.redirect_hostname, self.port, self.redirect_path)
-        };
+        let redirect_uri = self.get_redirect_uri();
         let message =
             format!("SECRET INFO\nCLIENT_ID: {}\nAUTH_URI: {}\nTOKEN_URI: {}\nINIT_PATH: {}\nREDIRECT_URI: {}\nPROVIDER: {}",
                     self.client_id, self.auth_uri, self.token_uri, self.init_path, redirect_uri, self.provider);
