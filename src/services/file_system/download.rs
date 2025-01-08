@@ -19,10 +19,31 @@ impl Download for FileSystemObject {
 
 impl FileSystemObject {
     fn partial_download(&self) -> HikyakuResult<ChunkData> {
+        let chunk_size = self.chunk_size();
+
         match self {
-            Self::AmazonS3 {..} => Ok(ChunkData::new(vec![], 0, false)),
-            Self::GoogleDrive {..} => Ok(ChunkData::new(vec![], 0, false)),
-            Self::Local {..} => Ok(ChunkData::new(vec![], 0, false)),
+            Self::AmazonS3 {
+                clients,
+                bucket,
+                key,
+                file_size,
+                ..
+            } => Ok(ChunkData::new(vec![], 0, false)),
+            Self::GoogleDrive {
+                clients,
+                google_drive_token,
+                queryable_file_or_parent_id,
+                not_exist_file_paths,
+                mime_type,
+                file_size,
+                ..
+            } => Ok(ChunkData::new(vec![], 0, false)),
+            Self::Local {
+                path,
+                file_size,
+                concurrency,
+                ..
+            } => Ok(ChunkData::new(vec![], 0, false)),
         }
     }
 }
