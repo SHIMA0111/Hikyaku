@@ -179,6 +179,7 @@ impl FileSystemBuilder<GoogleDriveCredential, GoogleDriveFileInfo> {
             upload_filename,
             mime_type,
             file_size,
+            chunk_size: self.chunk_size.into_inner(),
         };
 
         Ok(file_obj)

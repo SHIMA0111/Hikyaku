@@ -82,6 +82,7 @@ impl FileSystemBuilder<S3Credential, FileSystemParseResult> {
             bucket,
             key,
             file_size,
+            chunk_size: self.chunk_size.into_inner(),
         };
 
         Ok(file_obj)

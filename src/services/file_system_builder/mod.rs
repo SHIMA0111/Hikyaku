@@ -35,6 +35,7 @@ where
     file_info: RefCell<Option<FI>>,
     file_system_credential: C,
     concurrency: RefCell<u16>,
+    chunk_size: RefCell<u64>,
 }
 
 impl<C, FI> FileSystemBuilder<C, FI>
@@ -53,10 +54,13 @@ where
             parallelism as u16
         });
 
+        let chunk_size = RefCell::new(8 * 1024 * 1024);
+
         Self {
             file_info: RefCell::new(None),
             file_system_credential,
             concurrency,
+            chunk_size,
         }
     }
 
@@ -103,6 +107,29 @@ where
         *self.concurrency.borrow_mut() = concurrency.get();
         self
     }
+
+
+    /// Sets the chunk size for file system operations.
+    ///
+    /// # Arguments
+    ///
+    /// * `chunk_size` - A `u64` value that specifies the desired chunk size in bytes.
+    ///
+    /// # Returns
+    ///
+    /// * `&Self` - Returns a reference to the updated instance of the builder.
+    ///
+    /// This method allows you to configure the chunk size for file system operations.
+    /// Increasing or decreasing the chunk size can influence performance, particularly
+    /// when processing large files or transferring data over the network.
+    pub fn chunk_size(&self, chunk_size: u64) -> &Self {
+        if chunk_size == 0 {
+            log::warn!("Chunk size specified as 0. This will be ignored.");
+            return self
+        }
+        *self.chunk_size.borrow_mut() = chunk_size;
+        self
+    }
 }
 
 impl FileSystemBuilder<NoCredential, FileSystemParseResult> {
@@ -141,7 +168,7 @@ impl FileSystemBuilder<NoCredential, FileSystemParseResult> {
     ///
     /// - The file system prefix is not "file://".
     /// - The path has not been set.
-    pub fn build(&self) -> HikyakuResult<FileSystemObject> {
+    pub fn build(self) -> HikyakuResult<FileSystemObject> {
         let path = match self.file_info.borrow().as_ref() {
             Some(file_info) => {
                 if file_info.get_prefix() != "file://" {
@@ -182,6 +209,8 @@ impl FileSystemBuilder<NoCredential, FileSystemParseResult> {
             path: PathBuf::from(path),
             is_dir,
             file_size,
+            concurrency: self.concurrency.into_inner(),
+            chunk_size: self.chunk_size.into_inner(),
         };
 
         Ok(file_obj)

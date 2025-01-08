@@ -15,6 +15,7 @@ pub enum FileSystemObject {
         bucket: String,
         key: String,
         file_size: Option<u64>,
+        chunk_size: u64,
     },
     GoogleDrive {
         clients: Vec<Arc<Client>>,
@@ -24,11 +25,14 @@ pub enum FileSystemObject {
         upload_filename: Option<String>,
         mime_type: String,
         file_size: Option<u64>,
+        chunk_size: u64,
     },
     Local {
         path: PathBuf,
         is_dir: bool,
-        file_size: Option<u64>
+        file_size: Option<u64>,
+        concurrency: u16,
+        chunk_size: u64,
     },
 }
 
@@ -43,6 +47,34 @@ impl FileSystemObject {
                     None => false,
                 }
             },
+        }
+    }
+
+    pub(crate) fn chunk_size(&self) -> u64 {
+        match self {
+            Self::AmazonS3 { chunk_size, .. } |
+            Self::GoogleDrive { chunk_size, .. } |
+            Self::Local { chunk_size, .. }=> {
+                *chunk_size
+            },
+        }
+    }
+
+    pub(crate) fn concurrency(&self) -> u16 {
+        match self {
+            Self::AmazonS3 {clients, ..} => clients.len() as u16,
+            Self::GoogleDrive {clients, ..} => clients.len() as u16,
+            Self::Local {concurrency, ..} => *concurrency,
+        }
+    }
+
+    pub fn set_chunk_size(&mut self, size: u64) {
+        match self {
+            Self::AmazonS3 {chunk_size, ..} |
+            Self::GoogleDrive {chunk_size, ..} |
+            Self::Local {chunk_size, ..} => {
+                *chunk_size = size;
+            }
         }
     }
 }
@@ -65,5 +97,33 @@ impl Display for FileSystemObject {
                 write!(f, "Local: path: {}, file_size: {:?}", path.display(), file_size)
             }
         }
+    }
+}
+
+pub struct ChunkData {
+    data: Vec<u8>,
+    offset: u64,
+    is_last: bool,
+}
+
+impl ChunkData {
+    pub fn new(data: Vec<u8>, offset: u64, is_last: bool) -> Self {
+        Self {
+            data,
+            offset,
+            is_last,
+        }
+    }
+
+    pub(crate) fn get_data(&self) -> &[u8] {
+        &self.data
+    }
+
+    pub(crate) fn get_offset(&self) -> u64 {
+        self.offset
+    }
+
+    pub(crate) fn is_last(&self) -> bool {
+        self.is_last
     }
 }

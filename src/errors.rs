@@ -18,6 +18,8 @@ pub enum HikyakuError {
     EnvCredentialError(String),
     #[error("Connection error: {0}")]
     ConnectionError(String),
+    #[error("File object not exist error: {0}")]
+    NotExistFileError(String),
     #[error("Unknown error: {0}")]
     UnknownError(String),
 }
