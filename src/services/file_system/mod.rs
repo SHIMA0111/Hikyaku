@@ -6,29 +6,32 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use reqwest::Client;
 use aws_sdk_s3::client::Client as S3Client;
+use tokio::fs::File;
+use tokio::sync::Mutex;
 use crate::utils::credential::google_drive_credential::GoogleDriveTokens;
 
 #[derive(Clone)]
 pub enum FileSystemObject {
     AmazonS3 {
         clients: Vec<Arc<S3Client>>,
-        bucket: String,
-        key: String,
+        bucket: Arc<String>,
+        key: Arc<String>,
         file_size: Option<u64>,
         chunk_size: u64,
     },
     GoogleDrive {
         clients: Vec<Arc<Client>>,
         google_drive_token: Arc<GoogleDriveTokens>,
-        queryable_file_or_parent_id: String,
-        not_exist_file_paths: Vec<String>,
-        upload_filename: Option<String>,
-        mime_type: String,
+        queryable_file_or_parent_id: Arc<String>,
+        not_exist_file_paths: Arc<Vec<String>>,
+        upload_filename: Option<Arc<String>>,
+        mime_type: Arc<String>,
         file_size: Option<u64>,
         chunk_size: u64,
     },
     Local {
-        path: PathBuf,
+        path: Arc<PathBuf>,
+        file: Arc<Mutex<Option<File>>>,
         is_dir: bool,
         file_size: Option<u64>,
         concurrency: u16,
@@ -65,6 +68,14 @@ impl FileSystemObject {
             Self::AmazonS3 {clients, ..} => clients.len() as u16,
             Self::GoogleDrive {clients, ..} => clients.len() as u16,
             Self::Local {concurrency, ..} => *concurrency,
+        }
+    }
+
+    pub(crate) fn file_size(&self) -> Option<u64> {
+        match self {
+            Self::AmazonS3 {file_size, ..} |
+            Self::GoogleDrive {file_size, ..} |
+            Self::Local {file_size, ..} => file_size.clone(),
         }
     }
 
@@ -107,7 +118,9 @@ pub struct ChunkData {
 }
 
 impl ChunkData {
-    pub fn new(data: Vec<u8>, offset: u64, is_last: bool) -> Self {
+    pub fn new(data: Vec<u8>,
+               offset: u64,
+               is_last: bool) -> Self {
         Self {
             data,
             offset,
@@ -125,5 +138,9 @@ impl ChunkData {
 
     pub(crate) fn is_last(&self) -> bool {
         self.is_last
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.data.len()
     }
 }

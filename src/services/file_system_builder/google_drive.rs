@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use log::{error};
 use reqwest::{Client};
-use crate::errors::HikyakuError::{BuilderError, ConnectionError, GoogleDriveError, InvalidArgumentError, UnknownError};
+use crate::errors::HikyakuError::{BuilderError, ConnectionError, GoogleDriveError, InvalidArgumentError, UnknownError, UnsupportedError};
 use crate::errors::HikyakuResult;
 use crate::services::file_system::FileSystemObject;
 use crate::services::file_system_builder::FileSystemBuilder;
@@ -94,13 +94,13 @@ impl FileSystemBuilder<GoogleDriveCredential, GoogleDriveFileInfo> {
     /// }
     /// ```
     pub async fn build(self) -> HikyakuResult<FileSystemObject> {
-        let get_upload_filename = |path: &str| -> Option<String> {
+        let get_upload_filename = |path: &str| -> Option<Arc<String>> {
             if path.is_empty() {
                 None
             } else {
-                Some(path.rsplit_once("/")
+                Some(Arc::new(path.rsplit_once("/")
                     .map(|(_, file_name)| file_name.to_string())
-                    .unwrap_or(path.to_string()))
+                    .unwrap_or(path.to_string())))
             }
         };
 
@@ -148,7 +148,7 @@ impl FileSystemBuilder<GoogleDriveCredential, GoogleDriveFileInfo> {
                         (info, None)
                     } else {
                         let (info, filename) = get_file_from_id(&client, file_id).await?;
-                        (info, Some(filename))
+                        (info, Some(Arc::new(filename)))
                     };
                 (Some(file_info), vec![], filename)
             }
@@ -161,10 +161,13 @@ impl FileSystemBuilder<GoogleDriveCredential, GoogleDriveFileInfo> {
             .map(|_| Arc::new(Client::new()))
             .collect::<Vec<_>>();
         let (queryable_file_or_parent_id, mime_type, file_size) = match google_drive_file {
-            Some(file) => (
-                file.get_id().to_string(),
-                file.get_mime().to_string(),
-                file.get_size()),
+            Some(file) => {
+                if file.is_google_workspace_file() || file.is_invalid() {
+                    return Err(UnsupportedError(format!("The {} file is currently unsupported.", file.get_mime())));
+                }
+
+                (file.get_id().to_string(), file.get_mime().to_string(), file.get_size())
+            },
             None => (
                 "".to_string(),
                 FileType::Unknown.mime().to_string(),
@@ -174,10 +177,10 @@ impl FileSystemBuilder<GoogleDriveCredential, GoogleDriveFileInfo> {
         let file_obj = FileSystemObject::GoogleDrive {
             clients,
             google_drive_token: Arc::new(self.file_system_credential.get_credential()),
-            queryable_file_or_parent_id,
-            not_exist_file_paths: not_exist_paths,
+            queryable_file_or_parent_id: Arc::new(queryable_file_or_parent_id),
+            not_exist_file_paths: Arc::new(not_exist_paths),
             upload_filename,
-            mime_type,
+            mime_type: Arc::new(mime_type),
             file_size,
             chunk_size: self.chunk_size.into_inner(),
         };

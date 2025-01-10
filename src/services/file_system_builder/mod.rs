@@ -2,9 +2,11 @@ use std::cell::RefCell;
 use std::io;
 use std::num::NonZero;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::thread::available_parallelism;
 use log::error;
-use crate::errors::HikyakuError::InvalidArgumentError;
+use tokio::sync::Mutex;
+use crate::errors::HikyakuError::{InvalidArgumentError};
 use crate::errors::HikyakuResult;
 use crate::services::file_system::FileSystemObject;
 use crate::types::FileInfo;
@@ -206,7 +208,8 @@ impl FileSystemBuilder<NoCredential, FileSystemParseResult> {
         };
 
         let file_obj = FileSystemObject::Local {
-            path: PathBuf::from(path),
+            path: Arc::new(PathBuf::from(path)),
+            file: Arc::new(Mutex::new(None)),
             is_dir,
             file_size,
             concurrency: self.concurrency.into_inner(),

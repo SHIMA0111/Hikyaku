@@ -79,8 +79,8 @@ impl FileSystemBuilder<S3Credential, FileSystemParseResult> {
 
         let file_obj = FileSystemObject::AmazonS3 {
             clients,
-            bucket,
-            key,
+            bucket: Arc::new(bucket),
+            key: Arc::new(key),
             file_size,
             chunk_size: self.chunk_size.into_inner(),
         };

@@ -20,6 +20,10 @@ pub enum HikyakuError {
     ConnectionError(String),
     #[error("File object not exist error: {0}")]
     NotExistFileError(String),
+    #[error("File operation error: {0}")]
+    FileOperationError(String),
+    #[error("Unsupported error: {0}")]
+    UnsupportedError(String),
     #[error("Unknown error: {0}")]
     UnknownError(String),
 }

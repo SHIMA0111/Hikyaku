@@ -139,6 +139,7 @@ impl FileType {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn from_filename(filename: &str) -> Self {
         let path = Path::new(filename)
             .extension()

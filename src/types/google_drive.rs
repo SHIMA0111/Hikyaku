@@ -94,10 +94,6 @@ pub(crate) struct DriveFileQueryResponse {
 }
 
 impl DriveFileQueryResponse {
-    pub(crate) fn is_empty(&self) -> bool {
-        self.files.is_empty()
-    }
-
     pub(crate) fn files(&self) -> &[DriveFileInfo] {
         &self.files
     }
@@ -119,10 +115,6 @@ impl GoogleDriveFile {
             mime_type,
             size,
         }
-    }
-
-    pub(crate) fn is_dir(&self) -> bool {
-        self.mime_type == FileType::GoogleDriveFolder
     }
 
     pub (crate) fn is_invalid(&self) -> bool {
