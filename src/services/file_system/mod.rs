@@ -26,6 +26,7 @@ pub enum FileSystemObject {
         not_exist_file_paths: Arc<Vec<String>>,
         upload_filename: Option<Arc<String>>,
         mime_type: Arc<String>,
+        resumable_upload_url: Arc<Mutex<Option<String>>>,
         file_size: Option<u64>,
         chunk_size: u64,
     },

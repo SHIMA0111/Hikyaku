@@ -137,3 +137,14 @@ impl GoogleDriveFile {
         self.size
     }
 }
+
+#[derive(Deserialize, Debug)]
+pub(crate) struct FileId {
+    id: String,
+}
+
+impl FileId {
+    pub(crate) fn get_id(self) -> String {
+        self.id
+    }
+}

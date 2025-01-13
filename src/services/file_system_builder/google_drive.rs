@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use log::{error};
 use reqwest::{Client};
+use tokio::sync::Mutex;
 use crate::errors::HikyakuError::{BuilderError, ConnectionError, GoogleDriveError, InvalidArgumentError, UnknownError, UnsupportedError};
 use crate::errors::HikyakuResult;
 use crate::services::file_system::FileSystemObject;
@@ -181,6 +182,7 @@ impl FileSystemBuilder<GoogleDriveCredential, GoogleDriveFileInfo> {
             not_exist_file_paths: Arc::new(not_exist_paths),
             upload_filename,
             mime_type: Arc::new(mime_type),
+            resumable_upload_url: Arc::new(Mutex::new(None)),
             file_size,
             chunk_size: self.chunk_size.into_inner(),
         };
@@ -239,12 +241,13 @@ impl FileSystemBuilder<GoogleDriveCredential, GoogleDriveFileInfo> {
         
         // In this function, the not exist path not create due to the builder is originally gather information
         // to create object for Hikyaku. Therefore, collect the not exist path to pass it to FileSystemObject.
-        let remain_path = path_names
+        let mut remain_path = path_names
             .iter()
             // Skip explored paths
             .skip(complete_explore_path_num)
             .cloned()
             .collect::<Vec<_>>();
+        remain_path.pop();
 
         Ok((res, remain_path))
     }
