@@ -1,7 +1,7 @@
 use std::io::SeekFrom;
 use async_trait::async_trait;
-use log::{error, warn};
-use reqwest::header::CONTENT_TYPE;
+use log::{debug, error, warn};
+use reqwest::header::{CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE};
 use serde_json::json;
 use tokio::fs::File;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
@@ -50,6 +50,8 @@ impl FileSystemObject {
                 clients,
                 bucket,
                 key, ..} => {
+                // TODO: Implement the S3 upload
+                
                 Ok(())
             },
             Self::GoogleDrive {
@@ -65,7 +67,8 @@ impl FileSystemObject {
                         "The upload filename is not specified".to_string()));
                 }
 
-                let start = chunk_data.offset * self.chunk_size();
+                let offset = chunk_data.offset;
+                let start = offset * self.chunk_size();
                 let end = start + chunk_data.len() as u64 - 1;
 
                 let mut resumable_lock = resumable_upload_url.lock().await;
@@ -133,6 +136,29 @@ impl FileSystemObject {
                 }
 
                 let resumable_url = resumable_lock.as_ref().unwrap();
+                
+                let res = clients
+                    // Note: Google Drive resumable upload requires alignment bytes so it cannot parallelize. 
+                    .get(0).unwrap()
+                    .put(resumable_url)
+                    .header(CONTENT_LENGTH, chunk_data.len())
+                    .header(CONTENT_RANGE, format!("bytes={}-{}", start, end))
+                    .body(chunk_data.get_raw_data())
+                    .send()
+                    .await
+                    .map_err(|e| {
+                        GoogleDriveError(format!("Failed to send request to upload {}: {:?}", resumable_url, e))
+                    })?;
+                
+                if !res.status().is_success() && res.status() != 308 {
+                    let status = res.status();
+                    let body = res.text().await.unwrap_or_default();
+                    let message = format!("Google Drive API returned status code: {}, body: {}", status, body);
+                    debug!("Failed to put chunk data to Google Drive: {}", message);
+                    error!("Failed to put chunk data part of {}", offset);
+                    return Err(GoogleDriveError(format!("Failed to upload part: {}", status)));
+                }
+                
                 Ok(())
             },
             Self::Local {path, file, ..} => {

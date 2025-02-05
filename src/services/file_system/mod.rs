@@ -144,4 +144,8 @@ impl ChunkData {
     pub(crate) fn len(&self) -> usize {
         self.data.len()
     }
+    
+    pub(crate) fn get_raw_data(self) -> Vec<u8> {
+        self.data
+    }
 }
