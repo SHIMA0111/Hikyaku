@@ -13,7 +13,7 @@ google_oauth2 = ["oauth2", "axum", "url"]
 [dependencies]
 aws-config = "1"
 aws-sdk-s3 = "1"
-async-trait = "0"
+async-trait = "0.1"
 thiserror = "2"
 reqwest = { version = "0.12", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
