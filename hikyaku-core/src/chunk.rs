@@ -40,3 +40,13 @@ impl Chunk {
         self.data
     }
 }
+
+pub fn get_chunk_num(size: usize, chunk_size: usize) -> usize {
+    (size as f64 / chunk_size as f64).ceil() as usize
+}
+
+pub fn chunk_range(chunk_size: usize, offset: usize) -> (usize, usize) {
+    let start = offset * chunk_size;
+    let end = (offset + 1) * chunk_size - 1;
+    (start, end)
+}

@@ -12,9 +12,9 @@ pub struct S3 {
 }
 
 impl S3 {
-    pub fn new(clients: Vec<Client>, 
-               bucket: String, 
-               file: File, 
+    pub fn new(clients: Vec<Client>,
+               bucket: String,
+               file: File,
                chunk_size: u64) -> Self {
         Self {
             clients: clients.into_iter().map(|c| Arc::new(c)).collect(),
@@ -43,7 +43,7 @@ impl S3 {
     fn get_client(&self, idx: usize) -> Arc<Client> {
         self.clients[idx % self.clients.len()].clone()
     }
-    
+
     fn chunk_size(&self) -> u64 {
         self.chunk_size
     }
