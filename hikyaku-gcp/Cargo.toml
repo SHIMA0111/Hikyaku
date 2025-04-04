@@ -1,0 +1,8 @@
+[package]
+name = "hikyaku-gcp"
+version = { workspace = true }
+edition = "2024"
+
+[dependencies]
+log = { workspace = true }
+reqwest = { workspace = true }

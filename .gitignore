@@ -4,4 +4,4 @@
 Cargo.lock
 /secrets
 .hikyaku
-/src/main.rs
+/hikyaku/src/main.rs

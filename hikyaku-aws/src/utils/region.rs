@@ -1,10 +1,8 @@
 use std::str::FromStr;
 use aws_config::meta::region::ProvideRegion;
-use aws_config::{Region as AwsConfigRegion};
-use log::error;
-use crate::errors::{HikyakuError, HikyakuResult};
-use crate::errors::HikyakuError::InvalidArgumentError;
-use crate::utils::region::Region;
+use aws_config::Region;
+use hikyaku_core::errors::{HikyakuError, HikyakuResult};
+use hikyaku_core::region::BaseRegion;
 
 /// AWSRegion enumerates the various AWS regions.
 /// Each variant of the enum represents a specific AWS region, denoted by its common name,
@@ -81,9 +79,9 @@ pub enum AWSRegion {
     USWestGovernment,
 }
 
-impl Region for AWSRegion {
+impl BaseRegion for AWSRegion {
     /// Get the region code from user input region variant.
-    fn get_region(&self) -> &str {
+    fn region_name(&self) -> &str {
         match self {
             AWSRegion::Ohio => "us-east-2",
             AWSRegion::NVirginia => "us-east1",
@@ -132,7 +130,7 @@ impl FromStr for AWSRegion {
 /// To flexibility, the parser to parse input string to AWSRegion is split from the FromStr implementation.
 fn get_aws_region_from_str(region_str: &str) -> HikyakuResult<AWSRegion> {
     let region_str = region_str.to_lowercase();
-    
+
     match region_str.as_str() {
         "us-east-2" | "ohio" => Ok(AWSRegion::Ohio),
         "us-east1" | "virginia" => Ok(AWSRegion::NVirginia),
@@ -167,24 +165,23 @@ fn get_aws_region_from_str(region_str: &str) -> HikyakuResult<AWSRegion> {
         "us-gov-east-1" => Ok(AWSRegion::USEastGovernment),
         "us-gov-west-1" => Ok(AWSRegion::USWestGovernment),
         _ => {
-            error!("{} not exist in AWS region", region_str);
-            Err(InvalidArgumentError(format!("{} not exist in AWS region", region_str)))
+            Err(HikyakuError::InvalidArgumentError(format!("{} not exist in AWS region", region_str)))
         }
     }
 }
 
 impl ProvideRegion for AWSRegion {
     fn region(&self) -> aws_config::meta::region::future::ProvideRegion {
-        aws_config::meta::region::future::ProvideRegion::new(async { 
-            Some(AwsConfigRegion::new(self.get_region().to_string()))
+        aws_config::meta::region::future::ProvideRegion::new(async {
+            Some(Region::new(self.region_name().to_string()))
         })
     }
 }
 
-impl TryFrom<AwsConfigRegion> for AWSRegion {
+impl TryFrom<Region> for AWSRegion {
     type Error = HikyakuError;
-    
-    fn try_from(value: AwsConfigRegion) -> Result<Self, Self::Error> {
+
+    fn try_from(value: Region) -> Result<Self, Self::Error> {
         get_aws_region_from_str(value.as_ref())
     }
 }
@@ -198,9 +195,9 @@ impl Default for AWSRegion {
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
-    use crate::utils::region::Region;
+    use crate::utils::region::BaseRegion;
     use super::AWSRegion;
-    
+
     const AWS_REGION: [(&str, AWSRegion, &str); 32] = [
         ("ohio", AWSRegion::Ohio, "us-east-2"),
         ("virginia", AWSRegion::NVirginia, "us-east1"),
@@ -239,14 +236,14 @@ mod tests {
     #[test]
     fn test_region_valid_inputs() {
         for (region_str, region, region_id) in AWS_REGION {
-            assert_eq!(region.get_region(), region_id);
+            assert_eq!(region.region_name(), region_id);
             let region_from_str = AWSRegion::from_str(region_str).unwrap();
             assert_eq!(region, region_from_str);
             let region_from_id = AWSRegion::from_str(region_id).unwrap();
             assert_eq!(region, region_from_id);
         }
     }
-    
+
     #[test]
     fn test_region_invalid_inputs() {
         let region_str = "no-exist-1";
@@ -258,6 +255,6 @@ mod tests {
     #[test]
     fn test_region_default() {
         let region = AWSRegion::default();
-        assert_eq!(region.get_region(), "us-east-2");
+        assert_eq!(region.region_name(), "us-east-2");
     }
 }

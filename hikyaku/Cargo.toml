@@ -1,0 +1,19 @@
+[package]
+name = "hikyaku"
+description = "A Rust library for seamless file transfers across multiple cloud storage providers and local filesystems, simplifying multi-cloud data management"
+version = { workspace = true }
+edition = "2024"
+authors = ["shima@little-tabby.com"]
+license = "MIT/Apache-2.0"
+
+[features]
+default = []
+
+[dependencies]
+thiserror = { workspace = true }
+tokio = { version = "1", features = ["full"] }
+log = { workspace = true }
+regex = "1.10.6"
+
+[dev-dependencies]
+env_logger = "0.11"
