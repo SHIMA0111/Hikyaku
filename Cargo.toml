@@ -5,7 +5,7 @@ members = [
     "hikyaku-aws",
     "hikyaku-azure",
     "hikyaku-core",
-    "hikyaku-gcp", 
+    "hikyaku-gcp", "hikyaku-googledrive", 
     "hikyaku-legacy",
 ]
 

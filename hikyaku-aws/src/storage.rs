@@ -1,7 +1,8 @@
 use std::sync::Arc;
 use aws_sdk_s3::Client;
+use aws_sdk_s3::primitives::AggregatedBytes;
 use hikyaku_core::chunk::Chunk;
-use hikyaku_core::errors::HikyakuResult;
+use hikyaku_core::errors::{HikyakuError, HikyakuResult};
 use hikyaku_core::storage::{File, Storage};
 
 pub struct S3 {
@@ -27,7 +28,31 @@ impl S3 {
 
 impl Storage for S3 {
     async fn get_data(&self, offset: u64) -> HikyakuResult<Chunk> {
-        todo!()
+        let start_offset = self.chunk_size * offset;
+        let end_offset = self.chunk_size * (offset + 1) - 1;
+
+        let client = self.get_client(offset as usize);
+        let part_data = client
+            .get_object()
+            .bucket(self.bucket.as_str())
+            .key(self.file.get_key())
+            .range(format!("bytes={}-{}", start_offset, end_offset))
+            .send()
+            .await
+            .map_err(|e| {
+                HikyakuError::S3Error(format!("{:?}", e))
+            })?;
+
+        let bytes = part_data
+            .body
+            .collect()
+            .await
+            .map_err(|e| {
+                HikyakuError::S3Error(format!("{:?}", e))
+            })?
+            .into_bytes();
+
+        Ok(Chunk::new(bytes, offset as usize, self.is_last(offset)))
     }
 
     async fn put_data(&self, data: Chunk) -> HikyakuResult<()> {
@@ -36,6 +61,9 @@ impl Storage for S3 {
 
     async fn create_folder(&self, path: &str) -> HikyakuResult<()> {
         todo!()
+    }
+    fn is_last(&self, offset: u64) -> bool {
+        offset * self.chunk_size == self.file.size() - 1
     }
 }
 

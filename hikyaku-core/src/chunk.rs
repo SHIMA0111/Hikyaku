@@ -1,15 +1,19 @@
+use bytes::{Buf, Bytes};
+use bytes_utils::SegmentedBuf;
+
 pub struct Chunk {
-    data: Vec<u8>,
+    data: SegmentedBuf<Bytes>,
     size: usize,
     offset: usize,
     is_last: bool,
 }
 
 impl Chunk {
-    pub fn new(data: Vec<u8>, offset: usize, is_last: bool) -> Self {
+    pub fn new(data: Bytes, offset: usize, is_last: bool) -> Self {
         let size = data.len();
+        let data = SegmentedBuf::from(data);
         Self {
-            data, 
+            data,
             size,
             offset,
             is_last,
@@ -24,8 +28,16 @@ impl Chunk {
         self.is_last
     }
     
-    pub fn data(&self) -> &[u8] {
-        &self.data
+    pub fn segment_data(&self) -> &[u8] {
+        self.data.chunk()
+    }
+
+    pub fn vec_data(self) -> Vec<u8> {
+        self.data.into_inner().into_iter().flatten().collect()
+    }
+
+    pub fn copy_to_slice(&mut self, buf: &mut [u8]) {
+        self.data.copy_to_slice(buf)
     }
     
     pub fn size(&self) -> usize {
@@ -34,10 +46,6 @@ impl Chunk {
     
     pub fn offset(&self) -> usize {
         self.offset
-    }
-    
-    pub fn move_data(self) -> Vec<u8> {
-        self.data
     }
 }
 

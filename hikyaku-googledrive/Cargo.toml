@@ -1,0 +1,7 @@
+[package]
+name = "hikyaku-googledrive"
+edition = "2024"
+version.workspace = true
+
+[dependencies]
+reqwest = { workspace = true }
